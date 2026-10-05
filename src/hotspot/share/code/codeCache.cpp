@@ -778,6 +778,8 @@ void CodeCache::update_cold_gc_count() {
   size_t max = max_capacity();
   size_t used = max - free;
   double gc_interval = time - last_time;
+  size_t aggressive_sweeping_free_threshold = StartAggressiveSweepingAt / 100.0 * max;
+  _critically_low = free < aggressive_sweeping_free_threshold;
 
   _unloading_threshold_gc_requested = false;
   _last_unloading_time = time;
@@ -803,8 +805,7 @@ void CodeCache::update_cold_gc_count() {
   _unloading_allocation_rates.add(allocation_rate);
   _unloading_gc_intervals.add(gc_interval);
 
-  size_t aggressive_sweeping_free_threshold = StartAggressiveSweepingAt / 100.0 * max;
-  if (free < aggressive_sweeping_free_threshold) {
+  if (_critically_low) {
     // We are already in the red zone; be very aggressive to avoid disaster
     // But not more aggressive than 2. This ensures that an nmethod must
     // have been unused at least between two GCs to be considered cold still.
@@ -897,6 +898,8 @@ uint64_t CodeCache::_gc_epoch = 2;
 
 // How many GCs after an nmethod has not been used, do we consider it cold?
 uint64_t CodeCache::_cold_gc_count = INT_MAX;
+
+bool CodeCache::_critically_low = false;
 
 double CodeCache::_last_unloading_time = 0.0;
 size_t CodeCache::_last_unloading_used = 0;

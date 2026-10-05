@@ -1252,6 +1252,7 @@ nmethod* nmethod::restore(address code_cache_buffer,
   nm->set_method(method());
   nm->_compile_id = compile_id;
   nm->_gc_epoch = CodeCache::gc_epoch();
+  nm->_used = false;
   nm->set_immutable_data(immutable_data);
   nm->copy_values(&oop_list);
   nm->copy_values(&metadata_list);
@@ -2375,6 +2376,9 @@ void nmethod::verify_clean_inline_caches() {
 void nmethod::mark_as_maybe_on_stack() {
   MACOS_AARCH64_ONLY(os::thread_wx_enable_write());
   AtomicAccess::store(&_gc_epoch, CodeCache::gc_epoch());
+  if (!used()) {
+    set_used();
+  }
 }
 
 bool nmethod::is_maybe_on_stack() {
@@ -2869,6 +2873,13 @@ bool nmethod::is_cold() {
 
   if (!UseCodeCacheFlushing) {
     // Bail out if we don't heuristically remove nmethods
+    return false;
+  }
+
+  if (is_aot() && !used() && !CodeCache::is_critically_low()) {
+    // AOT code is installed before its method is first called: preload code at startup, other
+    // AOT code when the classes it depends on are initialized. Installing it also makes the code
+    // cache allocation rate look high. Keep it until it is used.
     return false;
   }
 
@@ -4640,6 +4651,7 @@ void nmethod::prepare_for_archiving_impl() {
   CodeBlob::prepare_for_archiving_impl();
   _deoptimization_generation = 0;
   _gc_epoch = 0;
+  _used = false;
   _method_profiling_count = 0;
   _osr_link = nullptr;
   _method = nullptr;
