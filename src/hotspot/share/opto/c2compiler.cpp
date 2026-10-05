@@ -60,6 +60,12 @@ const char* C2Compiler::retry_no_reduce_allocation_merges() {
 const char* C2Compiler::retry_no_superword() {
   return "retry without SuperWord";
 }
+const char* C2Compiler::retry_preload_with_traps() {
+  return "retry preload code with uncommon traps";
+}
+const char* C2Compiler::vector_intrinsic_not_inlined() {
+  return "Vector API intrinsic not inlined in AOT compilation";
+}
 
 void compiler_stubs_init(bool in_compiler_thread);
 
@@ -157,6 +163,7 @@ void C2Compiler::compile_method(ciEnv* env, ciMethod* target, int entry_bci, boo
   bool do_locks_coarsening = EliminateLocks;
   bool do_superword = UseSuperWord;
   bool gen_preload = (task->compile_reason() == CompileTask::Reason_AOTCompileForPreload);
+  bool preload_reduce_traps = PreloadReduceTraps;
   assert(!gen_preload || (AOTCodeCache::is_dumping_code() && (ClassInitBarrierMode > 0)), "sanity");
   while (!env->failing()) {
     ResourceMark rm;
@@ -169,7 +176,8 @@ void C2Compiler::compile_method(ciEnv* env, ciMethod* target, int entry_bci, boo
                     do_locks_coarsening,
                     do_superword,
                     gen_preload,
-                    install_code);
+                    install_code,
+                    preload_reduce_traps);
     Compile C(env, target, entry_bci, options, directive);
 
     // Check result and retry if appropriate.
@@ -210,7 +218,13 @@ void C2Compiler::compile_method(ciEnv* env, ciMethod* target, int entry_bci, boo
         env->report_failure(C.failure_reason());
         continue;  // retry
       }
-      if (C.has_boxed_value()) {
+      if (C.failure_reason_is(retry_preload_with_traps())) {
+        assert(preload_reduce_traps, "must make progress");
+        preload_reduce_traps = false;
+        env->report_failure(C.failure_reason());
+        continue;  // retry
+      }
+      if (C.has_boxed_value() && !C.failure_reason_is(vector_intrinsic_not_inlined())) {
         // Recompile without boxing elimination regardless failure reason.
         assert(eliminate_boxing, "must make progress");
         eliminate_boxing = false;

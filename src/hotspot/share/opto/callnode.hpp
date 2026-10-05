@@ -1031,6 +1031,8 @@ public:
   bool _is_non_escaping;
   // True when MemBar for new is redundant with MemBar at initialzer exit
   bool _is_allocation_MemBar_redundant;
+  // True for the allocation of a Vector API box or of its payload (see PhaseVector)
+  bool _is_vector_box;
 
   virtual uint size_of() const; // Size is bigger
   AllocateNode(Compile* C, const TypeFunc *atype, Node *ctrl, Node *mem, Node *abio,

@@ -376,6 +376,10 @@ Node* PhaseVector::expand_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc,
   // Generate array allocation for the field which holds the values.
   const TypeKlassPtr* array_klass = TypeKlassPtr::make(ciTypeArrayKlass::make(bt));
   Node* arr = kit.new_array(kit.makecon(array_klass), kit.intcon(num_elem), 1);
+  AllocateNode* arr_alloc = AllocateNode::Ideal_allocation(arr);
+  if (arr_alloc != nullptr) {
+    arr_alloc->_is_vector_box = true;
+  }
 
   // Store the vector value into the array.
   // (The store should be captured by InitializeNode and turned into initialized store later.)
@@ -397,6 +401,10 @@ Node* PhaseVector::expand_vbox_alloc_node(VectorBoxAllocateNode* vbox_alloc,
   const TypeKlassPtr* klass_type = box_type->as_klass_type();
   Node* klass_node = kit.makecon(klass_type);
   Node* vec_obj = kit.new_instance(klass_node);
+  AllocateNode* vec_alloc = AllocateNode::Ideal_allocation(vec_obj);
+  if (vec_alloc != nullptr) {
+    vec_alloc->_is_vector_box = true;
+  }
 
   // Store the allocated array into object.
   ciField* field = ciEnv::current()->vector_VectorPayload_klass()->get_field_by_name(ciSymbols::payload_name(),

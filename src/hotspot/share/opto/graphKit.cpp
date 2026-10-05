@@ -2229,7 +2229,7 @@ Node* GraphKit::uncommon_trap(int trap_request,
                                                       trap_request), bci());
   }
 
-  if (PreloadReduceTraps && Compile::current()->for_preload() &&
+  if (Compile::current()->preload_reduce_traps() &&
       (action != Deoptimization::Action_none)) {
     ResourceMark rm;
     ciMethod* cim = Compile::current()->method();

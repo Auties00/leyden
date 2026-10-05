@@ -42,6 +42,8 @@
 #include "gc/shared/c2/barrierSetC2.hpp"
 #include "jfr/jfrEvents.hpp"
 #include "jvm_io.h"
+#include "logging/log.hpp"
+#include "logging/logStream.hpp"
 #include "memory/allocation.hpp"
 #include "memory/arena.hpp"
 #include "memory/resourceArea.hpp"
@@ -868,6 +870,40 @@ Compile::Compile(ciEnv* ci_env, ciMethod* target, int osr_bci,
   // Now optimize
   Optimize();
   if (failing())  return;
+
+  if (env()->is_aot_compile() && EnableVectorSupport) {
+    CallJavaNode* call = find_vector_intrinsic_call();
+    if (call != nullptr) {
+      // AOT code that calls a Vector API intrinsic instead of inlining it runs the allocating
+      // Java fallback until the AOT invocation counter requests a JIT compilation. This is
+      // deliberately conservative: an intrinsic that does not apply here may apply on the
+      // production CPU, which can be a superset of this one.
+      if (preload_reduce_traps()) {
+        // Without uncommon traps the type checks that narrow the vector types stay
+        // unexploited; retry with traps.
+        record_failure(C2Compiler::retry_preload_with_traps());
+      } else {
+        LogTarget(Info, aot, codecache) lt;
+        if (lt.is_enabled()) {
+          ResourceMark rm;
+          LogStream ls(lt);
+          JVMState* jvms = call->jvms();
+          ls.print("AOT compile %d of", _compile_id);
+          method()->print_short_name(&ls);
+          ls.print(" not stored:");
+          call->method()->print_short_name(&ls);
+          if (jvms != nullptr) {
+            ls.print(" not inlined in");
+            jvms->method()->print_short_name(&ls);
+            ls.print(" at bci %d", jvms->bci());
+          }
+          ls.cr();
+        }
+        record_failure(C2Compiler::vector_intrinsic_not_inlined());
+      }
+      return;
+    }
+  }
   NOT_PRODUCT( verify_graph_edges(); )
 
 #ifndef PRODUCT
@@ -1025,6 +1061,38 @@ Compile::Compile(ciEnv* ci_env,
 Compile::~Compile() {
   delete _first_failure_details;
 };
+
+CallJavaNode* Compile::find_vector_intrinsic_call() {
+  ResourceMark rm;
+  Unique_Node_List wq;
+  wq.push(root());
+  for (uint i = 0; i < wq.size(); i++) {
+    Node* n = wq.at(i);
+    if (n->is_CallJava()) {
+      ciMethod* m = n->as_CallJava()->method();
+      if (m != nullptr && m->is_vector_method()) {
+        return n->as_CallJava();
+      }
+    }
+    for (uint j = 0; j < n->req(); j++) {
+      Node* in = n->in(j);
+      if (in != nullptr) {
+        wq.push(in);
+      }
+    }
+  }
+  return nullptr;
+}
+
+bool Compile::has_vector_box_allocations() {
+  for (int i = 0; i < macro_count(); i++) {
+    Node* n = macro_node(i);
+    if (n->is_Allocate() && n->as_Allocate()->_is_vector_box) {
+      return true;
+    }
+  }
+  return false;
+}
 
 //------------------------------Init-------------------------------------------
 // Prepare for a single compilation
@@ -2543,6 +2611,13 @@ void Compile::Optimize() {
     // Last attempt to eliminate macro nodes before expand
     mex.eliminate_macro_nodes();
     if (failing()) {
+      return;
+    }
+    if (preload_reduce_traps() && do_escape_analysis() && EliminateAllocations &&
+        has_vector_box_allocations()) {
+      // Without uncommon traps a vector live on a rarely taken path is boxed there, and the box
+      // or its payload can stay on the hot path, allocating on every call; retry with traps.
+      record_failure(C2Compiler::retry_preload_with_traps());
       return;
     }
     mex.eliminate_opaque_looplimit_macro_nodes();
@@ -4182,7 +4257,7 @@ bool Compile::too_many_traps(ciMethod* method,
   if (method->has_trap_at(bci)) {
     return true;
   }
-  if (PreloadReduceTraps && for_preload()) {
+  if (preload_reduce_traps()) {
     // Preload code should not have traps, if possible.
     return true;
   }
@@ -4211,7 +4286,7 @@ bool Compile::too_many_traps(ciMethod* method,
 // Less-accurate variant which does not require a method and bci.
 bool Compile::too_many_traps(Deoptimization::DeoptReason reason,
                              ciMethodData* logmd) {
-  if (PreloadReduceTraps && for_preload()) {
+  if (preload_reduce_traps()) {
     // Preload code should not have traps, if possible.
     return true;
   }

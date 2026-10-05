@@ -58,6 +58,8 @@ public:
   static const char* retry_no_reduce_allocation_merges();
   static const char* retry_no_locks_coarsening();
   static const char* retry_no_superword();
+  static const char* retry_preload_with_traps();
+  static const char* vector_intrinsic_not_inlined();
 
   // Print compilation timers and statistics
   void print_timers();

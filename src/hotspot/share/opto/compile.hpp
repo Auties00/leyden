@@ -53,6 +53,7 @@ class AddPNode;
 class Block;
 class Bundle;
 class CallGenerator;
+class CallJavaNode;
 class CallStaticJavaNode;
 class CloneMap;
 class CompilationFailureInfo;
@@ -185,6 +186,7 @@ class Options {
   const bool _for_preload;           // Generate code for preload (before Java method execution), do class init barriers
   const bool _do_superword;          // Do SuperWord
   const bool _install_code;          // Install the code that was compiled
+  const bool _preload_reduce_traps;  // Preload code avoids uncommon traps
  public:
   Options(bool subsume_loads,
           bool do_escape_analysis,
@@ -194,7 +196,8 @@ class Options {
           bool do_locks_coarsening,
           bool do_superword,
           bool for_preload,
-          bool install_code) :
+          bool install_code,
+          bool preload_reduce_traps) :
           _subsume_loads(subsume_loads),
           _do_escape_analysis(do_escape_analysis),
           _do_iterative_escape_analysis(do_iterative_escape_analysis),
@@ -203,7 +206,8 @@ class Options {
           _do_locks_coarsening(do_locks_coarsening),
           _for_preload(for_preload),
           _do_superword(do_superword),
-          _install_code(install_code) {
+          _install_code(install_code),
+          _preload_reduce_traps(preload_reduce_traps) {
   }
 
   static Options for_runtime_stub() {
@@ -216,7 +220,8 @@ class Options {
        /* do_lock_coarsening = */ false,
        /* for_preload = */ false,
        /* do_superword = */ true,
-       /* install_code = */ true
+       /* install_code = */ true,
+       /* preload_reduce_traps = */ false
     );
   }
 };
@@ -585,6 +590,7 @@ public:
 
   bool              do_clinit_barriers()  const { return _options._for_preload; }
   bool              for_preload()         const { return _options._for_preload; }
+  bool              preload_reduce_traps() const { return _options._for_preload && _options._preload_reduce_traps; }
 
   // Other fixed compilation parameters.
   ciMethod*         method() const              { return _method; }
@@ -1005,6 +1011,12 @@ public:
   bool should_delay_boxing_inlining(ciMethod* call_method, JVMState* jvms);
   bool should_delay_vector_inlining(ciMethod* call_method, JVMState* jvms);
   bool should_delay_vector_reboxing_inlining(ciMethod* call_method, JVMState* jvms);
+
+  // Returns a call to a Vector API intrinsic left in the graph, or null.
+  CallJavaNode* find_vector_intrinsic_call();
+  // Returns true if an allocation of a Vector API box or of its payload survived
+  // macro node elimination.
+  bool has_vector_box_allocations();
 
   // Helper functions to identify inlining potential at call-site
   ciMethod* optimize_virtual_call(ciMethod* caller, ciInstanceKlass* klass,
