@@ -2977,7 +2977,7 @@ void AOTCodeReader::read_dbg_strings(DbgStrings& dbg_strings, bool use_string_ta
 //      ...
 //      [_c_str_base, _c_str_base + _c_str_max -1],
 #define _extrs_max 140
-#define _stubs_max 210
+#define _stubs_max 260
 #define _shared_blobs_max 25
 #define _C1_blobs_max 50
 #define _C2_blobs_max 25
@@ -3156,6 +3156,7 @@ void AOTCodeAddressTable::init_extrs() {
 #if defined(AMD64) && !defined(ZERO)
   SET_ADDRESS(_extrs, SharedRuntime::montgomery_multiply);
   SET_ADDRESS(_extrs, SharedRuntime::montgomery_square);
+  SET_ADDRESS(_extrs, StubRoutines::x86::addr_mxcsr_std());
 #endif // AMD64
   SET_ADDRESS(_extrs, SharedRuntime::d2f);
   SET_ADDRESS(_extrs, SharedRuntime::d2i);
@@ -3222,7 +3223,7 @@ void AOTCodeAddressTable::init_extrs() {
   }
 
   _extrs_complete = true;
-  log_info(aot, codecache, init)("External addresses recorded");
+  log_info(aot, codecache, init)("External addresses recorded: %d", _extrs_length);
 }
 
 static bool initializing_early_stubs = false;
@@ -3433,31 +3434,20 @@ void AOTCodeAddressTable::init_stubs() {
   }
   SET_ADDRESS(_stubs, StubRoutines::lookup_secondary_supers_table_slow_path_stub());
 
+#if (defined(AMD64) || defined(AARCH64)) && !defined(ZERO)
+  // Every arch-specific entry declared by the stub generator.
+#define ADD_ARCH_ENTRY(arch, blob_name, stub_name, field_name, getter_name) \
+  SET_ADDRESS(_stubs, StubRoutines::arch::getter_name());
+#define ADD_ARCH_ENTRY_INIT(arch, blob_name, stub_name, field_name, getter_name, init_function) \
+  ADD_ARCH_ENTRY(arch, blob_name, stub_name, field_name, getter_name)
+  STUBGEN_ARCH_ENTRIES_DO(ADD_ARCH_ENTRY, ADD_ARCH_ENTRY_INIT)
+#undef ADD_ARCH_ENTRY_INIT
+#undef ADD_ARCH_ENTRY
+#endif
 #if defined(AMD64) && !defined(ZERO)
-  SET_ADDRESS(_stubs, StubRoutines::x86::d2i_fixup());
-  SET_ADDRESS(_stubs, StubRoutines::x86::f2i_fixup());
-  SET_ADDRESS(_stubs, StubRoutines::x86::f2l_fixup());
-  SET_ADDRESS(_stubs, StubRoutines::x86::float_sign_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::float_sign_flip());
-  SET_ADDRESS(_stubs, StubRoutines::x86::double_sign_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_popcount_lut());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_float_sign_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_float_sign_flip());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_double_sign_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_double_sign_flip());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_int_shuffle_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_byte_shuffle_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_short_shuffle_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_long_shuffle_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_long_sign_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_int_to_byte_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_int_to_short_mask());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_reverse_byte_perm_mask_int());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_reverse_byte_perm_mask_short());
-  SET_ADDRESS(_stubs, StubRoutines::x86::vector_reverse_byte_perm_mask_long());
   // The iota indices are ordered by type B/S/I/L/F/D, and the offset between two types is 64.
   // See C2_MacroAssembler::load_iota_indices().
-  for (int i = 0; i < 6; i++) {
+  for (int i = 1; i < 6; i++) {
     SET_ADDRESS(_stubs, StubRoutines::x86::vector_iota_indices() + i * 64);
   }
 #ifdef COMPILER2
@@ -3467,29 +3457,15 @@ void AOTCodeAddressTable::init_stubs() {
 #endif
 #endif
 #if defined(AARCH64) && !defined(ZERO)
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::zero_blocks());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::count_positives());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::count_positives_long());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::large_array_equals());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::compare_long_string_LL());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::compare_long_string_UU());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::compare_long_string_LU());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::compare_long_string_UL());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::string_indexof_linear_ul());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::string_indexof_linear_ll());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::string_indexof_linear_uu());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::large_byte_array_inflate());
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::spin_wait());
-
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::large_arrays_hashcode(T_BOOLEAN));
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::large_arrays_hashcode(T_BYTE));
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::large_arrays_hashcode(T_SHORT));
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::large_arrays_hashcode(T_CHAR));
-  SET_ADDRESS(_stubs, StubRoutines::aarch64::large_arrays_hashcode(T_INT));
+  // The iota indices are ordered by type B/S/I/L/F/D, and the offset between two types is 16.
+  // See the vloadcon rule in aarch64_vector.ad and C2_MacroAssembler::neon_rearrange_hsd().
+  for (int i = 1; i < 6; i++) {
+    SET_ADDRESS(_stubs, StubRoutines::aarch64::vector_iota_indices() + i * 16);
+  }
 #endif
 
   _complete = true;
-  log_info(aot, codecache, init)("Stubs recorded");
+  log_info(aot, codecache, init)("Stubs recorded: %d", _stubs_length);
 }
 
 void AOTCodeAddressTable::init_early_c1() {
