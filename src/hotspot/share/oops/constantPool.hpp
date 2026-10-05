@@ -605,6 +605,7 @@ class ConstantPool : public Metadata {
 #if INCLUDE_CDS
   // CDS support
   objArrayOop prepare_resolved_references_for_archiving() NOT_CDS_JAVA_HEAP_RETURN_(nullptr);
+  void add_appendices_to_heap_roots(objArrayOop archived_rr) NOT_CDS_JAVA_HEAP_RETURN;
   void remove_unshareable_info();
   void restore_unshareable_info(TRAPS);
 private:

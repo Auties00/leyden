@@ -294,14 +294,14 @@ void ConstantPool::iterate_archivable_resolved_references(Function function) {
         if (rie->is_resolved() && AOTConstantPoolResolver::is_resolution_deterministic(this, rie->constant_pool_index())) {
           int rr_index = rie->resolved_references_index();
           assert(resolved_reference_at(rr_index) != nullptr, "must exist");
-          function(rr_index);
+          function(rr_index, true);
 
           // Save the BSM as well (sometimes the JIT looks up the BSM it for replay)
           int indy_cp_index = rie->constant_pool_index();
           int bsm_mh_cp_index = bootstrap_method_ref_index_at(indy_cp_index);
           int bsm_rr_index = cp_to_object_index(bsm_mh_cp_index);
           assert(resolved_reference_at(bsm_rr_index) != nullptr, "must exist");
-          function(bsm_rr_index);
+          function(bsm_rr_index, false);
         }
       }
     }
@@ -315,7 +315,7 @@ void ConstantPool::iterate_archivable_resolved_references(Function function) {
                                cache()->can_archive_resolved_method(this, rme, rejection_reason)) {
           int rr_index = rme->resolved_references_index();
           assert(resolved_reference_at(rr_index) != nullptr, "must exist");
-          function(rr_index);
+          function(rr_index, true);
         }
       }
     }
@@ -342,7 +342,7 @@ objArrayOop ConstantPool::prepare_resolved_references_for_archiving() {
     int rr_len = rr->length();
     GrowableArray<bool> keep_resolved_refs(rr_len, rr_len, false);
 
-    iterate_archivable_resolved_references([&](int rr_index) {
+    iterate_archivable_resolved_references([&](int rr_index, bool is_appendix) {
       keep_resolved_refs.at_put(rr_index, true);
     });
 
@@ -372,6 +372,16 @@ objArrayOop ConstantPool::prepare_resolved_references_for_archiving() {
     return scratch_rr;
   }
   return rr;
+}
+
+// The appendices of the archived call sites are heap roots, so that AOT code can embed them.
+void ConstantPool::add_appendices_to_heap_roots(objArrayOop archived_rr) {
+  iterate_archivable_resolved_references([&](int rr_index, bool is_appendix) {
+    oop appendix = archived_rr->obj_at(rr_index);
+    if (is_appendix && appendix != nullptr) {
+      HeapShared::append_root(appendix);
+    }
+  });
 }
 #endif
 

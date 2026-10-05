@@ -1075,6 +1075,9 @@ void HeapShared::scan_java_class(Klass* orig_k) {
     if (rr != nullptr) {
       bool success = HeapShared::archive_reachable_objects_from(1, _dump_time_special_subgraph, rr);
       assert(success, "must be");
+      if (AOTCodeCache::is_dumping_code()) {
+        orig_ik->constants()->add_appendices_to_heap_roots(rr);
+      }
     }
   }
 }
