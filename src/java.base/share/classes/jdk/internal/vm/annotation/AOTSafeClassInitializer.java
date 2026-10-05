@@ -109,6 +109,16 @@ import java.lang.annotation.Target;
 ///  - A random seed or key that may need to be re-sampled at production
 ///    startup.
 ///
+/// State derived from the platform or the configuration, such as the vector
+/// sizes of the CPU or a system property, may be stored only when the VM records
+/// its inputs in the AOT cache and rejects the cache when they differ in the
+/// production run. The jdk.incubator.vector classes rely on this: the cache
+/// records the maximum vector lanes per element type and the value of
+/// `jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK` (see
+/// `FileMapHeader::validate()`). The `$assertionsDisabled` field of an
+/// AOT-initialized class is stored too, so its assertion status is the one of
+/// the assembly phase.
+///
 /// What is more, if the initialization of _X_ computes with some value _V_
 /// obtained from some other class _Y_, _Y_ should also be safe for AOT
 /// initialization, if there is any way for _X_ to detect a mismatch between

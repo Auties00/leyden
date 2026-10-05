@@ -34,6 +34,7 @@ import java.util.function.Function;
 import jdk.internal.foreign.AbstractMemorySegmentImpl;
 import jdk.internal.misc.ScopedMemoryAccess;
 import jdk.internal.misc.Unsafe;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -49,6 +50,7 @@ import static jdk.incubator.vector.VectorOperators.*;
  * {@code long} values.
  */
 @SuppressWarnings("cast")  // warning: redundant cast
+@AOTSafeClassInitializer
 public abstract class LongVector extends AbstractVector<Long> {
 
     LongVector(long[] vec) {
@@ -3791,6 +3793,7 @@ public abstract class LongVector extends AbstractVector<Long> {
      * Class representing {@link LongVector}'s of the same {@link VectorShape VectorShape}.
      */
     /*package-private*/
+    @AOTSafeClassInitializer
     static final class LongSpecies extends AbstractSpecies<Long> {
         private LongSpecies(VectorShape shape,
                 Class<? extends LongVector> vectorType,

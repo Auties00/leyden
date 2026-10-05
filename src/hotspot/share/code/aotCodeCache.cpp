@@ -32,6 +32,7 @@
 #include "ci/ciConstant.hpp"
 #include "ci/ciEnv.hpp"
 #include "ci/ciField.hpp"
+#include "ci/ciInstanceKlass.hpp"
 #include "ci/ciMethod.hpp"
 #include "ci/ciMethodData.hpp"
 #include "ci/ciObject.hpp"
@@ -247,14 +248,14 @@ bool AOTCodeCache::is_code_load_thread_on() {
   return UseAOTCodeLoadThread && AOTCodeCaching;
 }
 
-bool AOTCodeCache::allow_const_field(ciConstant& value) {
+// In AOT code only the static fields of AOT-initialized Vector API classes and the fields of
+// their archived objects are folded: they hold the same values in every production run.
+bool AOTCodeCache::allow_const_field(ciInstanceKlass* holder, ciObject* receiver) {
   ciEnv* env = CURRENT_ENV;
   precond(env != nullptr);
   assert(!env->is_aot_compile() || is_dumping_code(), "AOT compilation should be enabled");
-  return !env->is_aot_compile() // Restrict only when we generate AOT code
-        // Can not trust primitive too   || !is_reference_type(value.basic_type())
-        // May disable this too for now  || is_reference_type(value.basic_type()) && value.as_object()->should_be_constant()
-        ;
+  return !env->is_aot_compile() ||
+         (receiver == nullptr ? holder->is_aot_initialized_for_code() : receiver->is_aot_initialized_for_code());
 }
 
 // It is called from AOTMetaspace::initialize_shared_spaces()

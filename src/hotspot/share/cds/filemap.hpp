@@ -106,6 +106,9 @@ class FileMapHeader: private CDSFileMapHeaderBase {
   friend class CDSConstants;
   friend class VMStructs;
   using narrowPtr = AOTCompressedPointers::narrowPtr;
+public:
+  // The element types whose max vector lanes are recorded, see FileMapInfo::validate_vector_api_state().
+  static const int num_vector_lane_types = 6;
 private:
   // The following fields record the states of the VM during dump time.
   // They are compared with the runtime states to see if the archive
@@ -153,6 +156,13 @@ private:
   AOTMappedHeapHeader _mapped_heap_header;
   AOTStreamedHeapHeader _streamed_heap_header;
 
+  // The Vector API state stored in the archive was computed for these values; see
+  // FileMapInfo::validate_vector_api_state().
+  bool    _has_vector_api_state;
+  int     _max_vector_lanes[num_vector_lane_types]; // per element type, see vector_lane_types
+  bool    _has_vector_access_oob_check;             // VectorIntrinsics is stored initialized
+  jint    _vector_access_oob_check;                 // VectorIntrinsics.VECTOR_ACCESS_OOB_CHECK
+
   // The following are parameters that affect MethodData layout.
   u1      _compiler_type;
   uint    _type_profile_level;
@@ -191,6 +201,10 @@ public:
   int narrow_oop_shift()                   const { return _narrow_oop_shift; }
   bool compact_strings()                   const { return _compact_strings; }
   bool compact_headers()                   const { return _compact_headers; }
+  bool has_vector_api_state()              const { return _has_vector_api_state; }
+  int max_vector_lanes(int i)              const { return _max_vector_lanes[i]; }
+  bool has_vector_access_oob_check()       const { return _has_vector_access_oob_check; }
+  jint vector_access_oob_check()           const { return _vector_access_oob_check; }
   uintx max_heap_size()                    const { return _max_heap_size; }
   CompressedOops::Mode narrow_oop_mode()   const { return _narrow_oop_mode; }
   char* cloned_vtables()                   const { return decode<char*>(_cloned_vtables); }
@@ -251,6 +265,7 @@ public:
     return FileMapRegion::cast(&_regions[i]);
   }
 
+  void populate_vector_api_state();
   void populate(FileMapInfo *info, size_t core_region_alignment, size_t header_size,
                 size_t base_archive_name_size, size_t base_archive_name_offset);
   static bool is_valid_region(int region) {
@@ -414,6 +429,7 @@ public:
 
   bool validate_class_location();
   bool validate_aot_class_linking();
+  bool validate_vector_api_state();
 
 #if INCLUDE_JVMTI
   // Caller needs a ResourceMark because parts of the returned cfs are resource-allocated.

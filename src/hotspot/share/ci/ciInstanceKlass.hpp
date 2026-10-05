@@ -123,6 +123,10 @@ protected:
   static InstanceKlass::ClassState compute_init_state(InstanceKlass* ik);
 
 public:
+  // Returns true if AOT code may fold the static fields of this class and the fields of its
+  // archived instances (see AOTClassInitializer::is_aot_initialized_for_code()).
+  bool is_aot_initialized_for_code();
+
   // Has this klass been initialized?
   bool                   is_initialized() {
     InstanceKlass::ClassState state = update_if_shared();

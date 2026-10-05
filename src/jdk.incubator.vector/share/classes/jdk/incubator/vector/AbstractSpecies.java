@@ -25,6 +25,8 @@
 package jdk.incubator.vector;
 
 import java.lang.foreign.MemorySegment;
+import jdk.internal.misc.Unsafe;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Stable;
 import java.lang.reflect.Array;
@@ -33,6 +35,7 @@ import java.util.Arrays;
 import java.util.function.Function;
 import java.util.function.IntUnaryOperator;
 
+@AOTSafeClassInitializer
 abstract class AbstractSpecies<E> extends jdk.internal.vm.vector.VectorSupport.VectorSpecies<E>
                                   implements VectorSpecies<E> {
     @Stable
@@ -681,5 +684,34 @@ abstract class AbstractSpecies<E> extends jdk.internal.vm.vector.VectorSupport.V
     public final int hashCode() {
         int[] a = { laneType.ordinal(), laneCount, vectorShape.ordinal() };
         return Arrays.hashCode(a);
+    }
+
+    /**
+     * Called by the JVM when it creates an AOT cache in which the Vector API is
+     * initialized. Computes the lazily initialized JIT constants of the species
+     * whose vector classes are initialized, and of the conversion operators, so
+     * that the cache holds them and AOT-compiled code can fold them.
+     */
+    private static void assemblySetup() {
+        Unsafe u = Unsafe.getUnsafe();
+        for (LaneType laneType : LaneType.values()) {
+            for (VectorShape shape : VectorShape.values()) {
+                AbstractSpecies<?> s = findSpecies(laneType, shape);
+                if (u.shouldBeInitialized(s.vectorType())) {
+                    continue;  // not used when the cache was trained
+                }
+                s.dummyVector();
+                s.indexSpecies();
+                // The byte species of the same shape has fewer lanes than this species has
+                // bytes when the max shape is wider for this lane type than for bytes.
+                if (s.byteSpecies().length() == s.vectorByteSize()) {
+                    s.swapBytesShuffle();
+                }
+            }
+            for (LaneType ran : LaneType.values()) {
+                VectorOperators.ConversionImpl.ofCast(laneType, ran);
+                VectorOperators.ConversionImpl.ofReinterpret(laneType, ran);
+            }
+        }
     }
 }

@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.IntUnaryOperator;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -41,6 +42,7 @@ import static jdk.incubator.vector.VectorOperators.*;
 // -- This file was mechanically generated: Do not edit! -- //
 
 @SuppressWarnings("cast")  // warning: redundant cast
+@AOTSafeClassInitializer
 final class DoubleVector128 extends DoubleVector {
     static final DoubleSpecies VSPECIES =
         (DoubleSpecies) DoubleVector.SPECIES_128;
@@ -560,6 +562,7 @@ final class DoubleVector128 extends DoubleVector {
 
     // Mask
 
+    @AOTSafeClassInitializer
     static final class DoubleMask128 extends AbstractMask<Double> {
         static final int VLENGTH = VSPECIES.laneCount();    // used by the JVM
 
@@ -793,6 +796,7 @@ final class DoubleVector128 extends DoubleVector {
 
     // Shuffle
 
+    @AOTSafeClassInitializer
     static final class DoubleShuffle128 extends AbstractShuffle<Double> {
         static final int VLENGTH = VSPECIES.laneCount();    // used by the JVM
 

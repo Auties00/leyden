@@ -34,6 +34,7 @@ import java.util.function.Function;
 import jdk.internal.foreign.AbstractMemorySegmentImpl;
 import jdk.internal.misc.ScopedMemoryAccess;
 import jdk.internal.misc.Unsafe;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -49,6 +50,7 @@ import static jdk.incubator.vector.VectorOperators.*;
  * {@code $type$} values.
  */
 @SuppressWarnings("cast")  // warning: redundant cast
+@AOTSafeClassInitializer
 public abstract class $abstractvectortype$ extends AbstractVector<$Boxtype$> {
 
     $abstractvectortype$($type$[] vec) {
@@ -5578,6 +5580,7 @@ public abstract class $abstractvectortype$ extends AbstractVector<$Boxtype$> {
      * Class representing {@link $abstractvectortype$}'s of the same {@link VectorShape VectorShape}.
      */
     /*package-private*/
+    @AOTSafeClassInitializer
     static final class $Type$Species extends AbstractSpecies<$Boxtype$> {
         private $Type$Species(VectorShape shape,
                 Class<? extends $abstractvectortype$> vectorType,

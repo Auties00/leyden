@@ -24,6 +24,9 @@
  */
 package jdk.incubator.vector;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
+
+@AOTSafeClassInitializer
 /*package-private*/ class Util {
     public static void requires(boolean cond, String message) {
         if (!cond) {

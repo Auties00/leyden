@@ -92,9 +92,12 @@ class SerializeClosure;
   template(java_lang_Void,                            "java/lang/Void")                           \
                                                                                                   \
   template(jdk_incubator_vector,                      "jdk.incubator.vector")                     \
+  template(jdk_incubator_vector_AbstractSpecies,      "jdk/incubator/vector/AbstractSpecies")     \
+  template(jdk_incubator_vector_VectorIntrinsics,     "jdk/incubator/vector/VectorIntrinsics")    \
   template(jdk_internal_vm_vector_VectorSupport,      "jdk/internal/vm/vector/VectorSupport")     \
   template(jdk_internal_vm_vector_Float16Math,        "jdk/internal/vm/vector/Float16Math")       \
   template(jdk_internal_vm_vector_VectorPayload,      "jdk/internal/vm/vector/VectorSupport$VectorPayload") \
+  template(jdk_internal_vm_vector_VectorSpecies,      "jdk/internal/vm/vector/VectorSupport$VectorSpecies") \
   template(jdk_internal_vm_vector_Vector,             "jdk/internal/vm/vector/VectorSupport$Vector")        \
   template(jdk_internal_vm_vector_VectorMask,         "jdk/internal/vm/vector/VectorSupport$VectorMask")    \
   template(jdk_internal_vm_vector_VectorShuffle,      "jdk/internal/vm/vector/VectorSupport$VectorShuffle") \
@@ -742,6 +745,8 @@ class SerializeClosure;
   template(java_util_ArrayList,                             "java/util/ArrayList")                                \
   template(jdk_internal_vm_annotation_AOTRuntimeSetup_signature, "Ljdk/internal/vm/annotation/AOTRuntimeSetup;")  \
   template(runtimeSetup,                                    "runtimeSetup")                                       \
+  template(assemblySetup,                                   "assemblySetup")                                      \
+  template(VECTOR_ACCESS_OOB_CHECK_name,                    "VECTOR_ACCESS_OOB_CHECK")                            \
   template(toFileURL_name,                                  "toFileURL")                                          \
   template(toFileURL_signature,                             "(Ljava/lang/String;)Ljava/net/URL;")                 \
                                                                                                                   \

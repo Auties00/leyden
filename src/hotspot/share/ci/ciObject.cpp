@@ -22,6 +22,8 @@
  *
  */
 
+#include "cds/aotCacheAccess.hpp"
+#include "cds/aotClassInitializer.hpp"
 #include "ci/ciObject.hpp"
 #include "ci/ciUtilities.inline.hpp"
 #include "code/aotCodeCache.hpp"
@@ -198,6 +200,19 @@ void ciObject::add_to_constant_value_cache(int off, ciConstant val) {
     _constant_values = new (arena) GrowableArray<ConstantValue>(arena, 1, 0, ConstantValue());
   }
   _constant_values->append(ConstantValue(off, val));
+}
+
+// ------------------------------------------------------------------
+// ciObject::is_aot_initialized_for_code()
+bool ciObject::is_aot_initialized_for_code() {
+  bool result = false;
+  GUARDED_VM_ENTRY(
+    oop o = get_oop();
+    result = o->klass()->is_instance_klass() &&
+             AOTClassInitializer::is_aot_initialized_for_code(InstanceKlass::cast(o->klass())) &&
+             AOTCacheAccess::get_archived_object_permanent_index(o) >= 0;
+  )
+  return result;
 }
 
 // ------------------------------------------------------------------

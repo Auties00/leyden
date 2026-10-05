@@ -28,6 +28,7 @@ import java.lang.foreign.MemorySegment;
 
 import jdk.internal.foreign.AbstractMemorySegmentImpl;
 import jdk.internal.foreign.Utils;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -40,6 +41,7 @@ import java.util.function.IntUnaryOperator;
 import static jdk.incubator.vector.VectorOperators.*;
 
 @SuppressWarnings("cast")
+@AOTSafeClassInitializer
 abstract class AbstractVector<E> extends Vector<E> {
     /**
      * The order of vector bytes when stored in natural,

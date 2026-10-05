@@ -36,6 +36,7 @@
 #include "memory/resourceArea.hpp"
 #include "oops/constantPool.inline.hpp"
 #include "runtime/handles.inline.hpp"
+#include "runtime/javaCalls.hpp"
 #include "runtime/mutexLocker.hpp"
 
 GrowableArray<InstanceKlass*>* FinalImageRecipes::_tmp_reflect_klasses = nullptr;
@@ -284,6 +285,15 @@ void FinalImageRecipes::load_all_classes(TRAPS) {
   }
 }
 
+// Lets jdk.incubator.vector compute the lazily initialized constants that AOT code folds.
+static void apply_recipes_for_vector_api(TRAPS) {
+  InstanceKlass* ik = SystemDictionary::find_instance_klass(THREAD, vmSymbols::jdk_incubator_vector_AbstractSpecies(), Handle());
+  if (ik != nullptr && ik->is_initialized()) {
+    JavaValue result(T_VOID);
+    JavaCalls::call_static(&result, ik, vmSymbols::assemblySetup(), vmSymbols::void_method_signature(), CHECK);
+  }
+}
+
 void FinalImageRecipes::apply_recipes_for_reflection_data(JavaThread* current) {
   assert(CDSConfig::is_dumping_final_static_archive(), "must be");
 
@@ -400,6 +410,7 @@ void FinalImageRecipes::apply_recipes(TRAPS) {
 
 void FinalImageRecipes::apply_recipes_impl(TRAPS) {
   load_all_classes(CHECK);
+  apply_recipes_for_vector_api(CHECK);
   apply_recipes_for_constantpool(THREAD);
   apply_recipes_for_reflection_data(CHECK);
   apply_recipes_for_dynamic_proxies(CHECK);

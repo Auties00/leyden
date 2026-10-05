@@ -1682,8 +1682,8 @@ Value GraphBuilder::make_constant(ciConstant field_value, ciField* field) {
   ValueType* value = as_ValueType(field_value);
 
   // Attach dimension info to stable arrays.
-  if (FoldStableValues &&
-      field->is_stable() && field_type == T_ARRAY && !field_value.is_null_or_zero()) {
+  if (field->is_stable() && field->fold_stable_values() &&
+      field_type == T_ARRAY && !field_value.is_null_or_zero()) {
     ciArray* array = field_value.as_object()->as_array();
     jint dimension = field->type()->as_array_klass()->dimension();
     value = new StableArrayConstant(array, dimension);

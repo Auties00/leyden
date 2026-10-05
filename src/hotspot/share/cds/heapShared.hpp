@@ -448,6 +448,10 @@ private:
   // Returns -1 if obj is not in the heap root set.
   static int get_root_index(oop obj) NOT_CDS_JAVA_HEAP_RETURN_(-1);
 
+  // Makes every archived object reachable from the static fields of the given classes a
+  // root, so that AOT code can embed it.
+  static void root_static_objects_for_aot_code(GrowableArray<InstanceKlass*>* classes) NOT_CDS_JAVA_HEAP_RETURN;
+
   static GrowableArrayCHeap<oop, mtClassShared>* pending_roots() { return _pending_roots; }
 
   // Dump-time and runtime

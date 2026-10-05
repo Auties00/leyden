@@ -277,7 +277,6 @@ const Type* Type::make_from_constant(ciConstant constant, bool require_constant,
             con_type = con_type->is_aryptr()->cast_to_autobox_cache();
           }
           if (stable_dimension > 0) {
-            assert(FoldStableValues, "sanity");
             assert(!con_type->is_zero_type(), "default value for stable field");
             con_type = con_type->is_aryptr()->cast_to_stable(true, stable_dimension);
           }
@@ -388,7 +387,7 @@ const Type* Type::make_constant_from_field(ciField* field, ciInstance* holder,
   assert(con.is_valid(), "elembt=%s; loadbt=%s; unsigned=%d",
          type2name(field_value.basic_type()), type2name(loadbt), is_unsigned_load);
 
-  bool is_stable_array = FoldStableValues && field->is_stable() && field->type()->is_array_klass();
+  bool is_stable_array = field->is_stable() && field->fold_stable_values() && field->type()->is_array_klass();
   int stable_dimension = (is_stable_array ? field->type()->as_array_klass()->dimension() : 0);
   bool is_narrow_oop = (loadbt == T_NARROWOOP);
 

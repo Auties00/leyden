@@ -161,5 +161,8 @@ class VectorSupport : AllStatic {
 
   static bool is_vector(Klass* klass);
   static bool is_vector_mask(Klass* klass);
+
+  // The maximum number of lanes of a vector of the given element type, or -1 without C2.
+  static int max_lane_count(BasicType bt);
 };
 #endif // SHARE_PRIMS_VECTORSUPPORT_HPP

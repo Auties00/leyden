@@ -22,6 +22,7 @@
  *
  */
 
+#include "cds/aotClassInitializer.hpp"
 #include "cds/aotClassLocation.hpp"
 #include "cds/aotLogging.hpp"
 #include "cds/aotMappedHeapLoader.hpp"
@@ -63,7 +64,9 @@
 #include "oops/trainingData.hpp"
 #include "oops/typeArrayKlass.hpp"
 #include "prims/jvmtiExport.hpp"
+#include "prims/vectorSupport.hpp"
 #include "runtime/arguments.hpp"
+#include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/globals_extension.hpp"
 #include "runtime/java.hpp"
 #include "runtime/javaCalls.hpp"
@@ -237,6 +240,7 @@ void FileMapHeader::populate(FileMapInfo *info, size_t core_region_alignment,
   // Which JIT compier is used
   _compiler_type = (u1)CompilerConfig::compiler_type();
   _type_profile_level = TypeProfileLevel;
+  populate_vector_api_state();
   _type_profile_args_limit = TypeProfileArgsLimit;
   _type_profile_parms_limit = TypeProfileParmsLimit;
   _type_profile_width = TypeProfileWidth;
@@ -1766,6 +1770,88 @@ bool FileMapInfo::open_as_input() {
     }
   }
 
+  return true;
+}
+
+// The element types of the max vector lanes recorded in the header.
+static const BasicType vector_lane_types[] = { T_BYTE, T_SHORT, T_INT, T_LONG, T_FLOAT, T_DOUBLE };
+
+void FileMapHeader::populate_vector_api_state() {
+  STATIC_ASSERT(ARRAY_SIZE(vector_lane_types) == num_vector_lane_types);
+  _has_vector_api_state = AOTClassInitializer::has_archived_vector_api_state();
+  for (int i = 0; i < num_vector_lane_types; i++) {
+    _max_vector_lanes[i] = VectorSupport::max_lane_count(vector_lane_types[i]);
+  }
+  _has_vector_access_oob_check = false;
+  _vector_access_oob_check = 0;
+  InstanceKlass* ik = SystemDictionary::find_instance_klass(Thread::current(),
+                                                            vmSymbols::jdk_incubator_vector_VectorIntrinsics(),
+                                                            Handle());
+  if (ik != nullptr && ik->has_aot_initialized_mirror()) {
+    fieldDescriptor fd;
+    if (ik->find_local_field(vmSymbols::VECTOR_ACCESS_OOB_CHECK_name(), vmSymbols::int_signature(), &fd) &&
+        fd.is_static()) {
+      _has_vector_access_oob_check = true;
+      _vector_access_oob_check = ik->java_mirror()->int_field(fd.offset());
+    }
+  }
+}
+
+// Returns true if prop is unset (the default 2) or a decimal integer, setting value.
+static bool vector_access_oob_check_property(jint* value) {
+  const char* prop = Arguments::get_property("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK");
+  if (prop == nullptr) {
+    *value = 2;
+    return true;
+  }
+  const char* p = (*prop == '-') ? prop + 1 : prop;
+  if (*p == '\0' || strlen(p) > 9) {
+    return false;
+  }
+  for (const char* q = p; *q != '\0'; q++) {
+    if (*q < '0' || *q > '9') {
+      return false;
+    }
+  }
+  *value = atoi(prop);
+  return true;
+}
+
+// The Vector API state of the archive depends on the vector sizes of the CPU and on a system
+// property, so an archive that stores it can only be used where they are the same. This is
+// checked after VM_Version initialization, which FileMapHeader::validate() precedes.
+bool FileMapInfo::validate_vector_api_state() {
+  if (!header()->has_vector_api_state()) {
+    return true;
+  }
+  const char* file_type = CDSConfig::type_of_archive_being_loaded();
+#if COMPILER2_OR_JVMCI
+  if (!FLAG_IS_DEFAULT(EnableVectorSupport) && !EnableVectorSupport) {
+    AOTMetaspace::report_loading_error("The %s stores Vector API state, which cannot be used with "
+                                       "EnableVectorSupport disabled.", file_type);
+    return false;
+  }
+#endif
+  for (int i = 0; i < FileMapHeader::num_vector_lane_types; i++) {
+    BasicType bt = vector_lane_types[i];
+    int lanes = VectorSupport::max_lane_count(bt);
+    if (header()->max_vector_lanes(i) != lanes) {
+      AOTMetaspace::report_loading_error("The %s's max vector lanes for %s (%d) does not equal the current "
+                                         "max vector lanes for %s (%d).", file_type, type2name(bt),
+                                         header()->max_vector_lanes(i), type2name(bt), lanes);
+      return false;
+    }
+  }
+  if (header()->has_vector_access_oob_check()) {
+    jint oob_check;
+    if (!vector_access_oob_check_property(&oob_check) || oob_check != header()->vector_access_oob_check()) {
+      const char* prop = Arguments::get_property("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK");
+      AOTMetaspace::report_loading_error("The %s's jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK setting (%d) does "
+                                         "not equal the current setting (%s).", file_type,
+                                         header()->vector_access_oob_check(), prop != nullptr ? prop : "2");
+      return false;
+    }
+  }
   return true;
 }
 

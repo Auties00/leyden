@@ -634,14 +634,19 @@ int VectorSupport::vop2ideal(jint id, LaneType lt) {
  * Implementation of the jdk.internal.vm.vector.VectorSupport class
  */
 
-JVM_ENTRY(jint, VectorSupport_GetMaxLaneCount(JNIEnv *env, jclass vsclazz, jobject clazz)) {
+int VectorSupport::max_lane_count(BasicType bt) {
 #ifdef COMPILER2
+  return Matcher::max_vector_size(bt);
+#else
+  return -1;
+#endif // COMPILER2
+}
+
+JVM_ENTRY(jint, VectorSupport_GetMaxLaneCount(JNIEnv *env, jclass vsclazz, jobject clazz)) {
   oop mirror = JNIHandles::resolve_non_null(clazz);
   if (java_lang_Class::is_primitive(mirror)) {
-    BasicType bt = java_lang_Class::primitive_type(mirror);
-    return Matcher::max_vector_size(bt);
+    return VectorSupport::max_lane_count(java_lang_Class::primitive_type(mirror));
   }
-#endif // COMPILER2
   return -1;
 } JVM_END
 

@@ -31,6 +31,8 @@
 class InstanceKlass;
 
 class AOTClassInitializer : AllStatic {
+  static bool _has_archived_vector_api_state;
+
   static bool has_default_static_fields(InstanceKlass* ik);
   static bool check_can_be_preinited(InstanceKlass* ik);
   static bool can_be_preinited(InstanceKlass* ik);
@@ -50,6 +52,18 @@ public:
   static bool can_archive_initialized_mirror(InstanceKlass* src_ik);
 
   static void call_runtime_setup(JavaThread* current, InstanceKlass* ik);
+
+  // Returns true for an @AOTSafeClassInitializer class of jdk.incubator.vector or a payload
+  // class of jdk.internal.vm.vector.VectorSupport.
+  static bool is_vector_api_class(const InstanceKlass* ik);
+
+  // Returns true for a Vector API class stored in the initialized state without runtime setup:
+  // AOT code may fold its static fields and the fields of its archived objects.
+  static bool is_aot_initialized_for_code(InstanceKlass* ik);
+
+  // The cache stores Vector API state, which depends on the vector sizes of the CPU.
+  static bool has_archived_vector_api_state() { return _has_archived_vector_api_state; }
+  static void set_has_archived_vector_api_state() { _has_archived_vector_api_state = true; }
 
   // Support for regression testing. Available in debug builds only.
   static void init_test_class(TRAPS) NOT_DEBUG_RETURN;

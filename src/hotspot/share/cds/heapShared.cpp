@@ -62,6 +62,7 @@
 #include "memory/iterator.inline.hpp"
 #include "memory/resourceArea.hpp"
 #include "memory/universe.hpp"
+#include "oops/access.inline.hpp"
 #include "oops/compressedOops.inline.hpp"
 #include "oops/fieldStreams.inline.hpp"
 #include "oops/objArrayOop.inline.hpp"
@@ -487,6 +488,63 @@ int HeapShared::append_root(oop obj) {
   }
 }
 
+class AOTCodeRootPusher : public BasicOopIterateClosure {
+  GrowableArray<oop>* _stack;
+  template <class T> void do_oop_work(T* p) {
+    oop o = RawAccess<>::oop_load(p);
+    if (o != nullptr) {
+      _stack->push(o);
+    }
+  }
+public:
+  AOTCodeRootPusher(GrowableArray<oop>* stack) : _stack(stack) {}
+  void do_oop(narrowOop* p) { do_oop_work(p); }
+  void do_oop(oop* p)       { do_oop_work(p); }
+};
+
+void HeapShared::root_static_objects_for_aot_code(GrowableArray<InstanceKlass*>* classes) {
+  ResourceMark rm;
+  SeenObjectsTable* seen = new (mtClassShared) SeenObjectsTable(INITIAL_TABLE_SIZE, MAX_TABLE_SIZE);
+  GrowableArray<oop> stack;
+  for (int i = 0; i < classes->length(); i++) {
+    InstanceKlass* ik = classes->at(i);
+    oop mirror = ik->java_mirror();
+    for (JavaFieldStream fs(ik); !fs.done(); fs.next()) {
+      if (fs.access_flags().is_static() && is_reference_type(fs.field_descriptor().field_type())) {
+        oop v = mirror->obj_field(fs.offset());
+        if (v != nullptr) {
+          stack.push(v);
+        }
+      }
+    }
+  }
+  int rooted = 0;
+  while (stack.length() > 0) {
+    oop o = stack.pop();
+    if (java_lang_Class::is_instance(o)) {
+      continue; // AOT code refers to a class through its Klass*
+    }
+    bool created;
+    seen->put_if_absent(o, true, &created);
+    if (!created) {
+      continue;
+    }
+    seen->maybe_grow();
+    CachedOopInfo* info = get_cached_oop_info(o);
+    if (info == nullptr) {
+      continue; // not archived
+    }
+    if (info->root_index() < 0) {
+      append_root(o);
+      rooted++;
+    }
+    AOTCodeRootPusher pusher(&stack);
+    o->oop_iterate(&pusher);
+  }
+  delete seen;
+  log_info(aot, heap)("Rooted %d objects reachable from %d classes for AOT code", rooted, classes->length());
+}
+
 int HeapShared::get_root_index(oop obj) {
   if (java_lang_Class::is_instance(obj)) {
     obj = scratch_java_mirror(obj);
@@ -791,6 +849,9 @@ bool HeapShared::is_archivable_hidden_klass(InstanceKlass* ik) {
 
 void HeapShared::copy_and_rescan_aot_inited_mirror(InstanceKlass* ik) {
   ik->set_has_aot_initialized_mirror();
+  if (AOTClassInitializer::is_vector_api_class(ik)) {
+    AOTClassInitializer::set_has_archived_vector_api_state();
+  }
 
   oop orig_mirror;
   if (RegeneratedClasses::is_regenerated_object(ik)) {
@@ -1153,6 +1214,12 @@ void KlassSubGraphInfo::check_allowed_klass(InstanceKlass* ik) {
 
   if (ik->module()->name() == vmSymbols::java_base()) {
     assert(ik->package() != nullptr, "classes in java.base cannot be in unnamed package");
+    return;
+  }
+
+  // AOT-linked privileged @AOTSafeClassInitializer classes are loaded before their archived
+  // objects are used.
+  if (CDSConfig::is_dumping_aot_linked_classes() && ik->has_aot_safe_initializer() && !ik->is_hidden()) {
     return;
   }
 

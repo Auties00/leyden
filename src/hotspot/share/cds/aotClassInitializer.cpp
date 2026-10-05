@@ -22,14 +22,17 @@
  *
  */
 
+#include "cds/aotCacheAccess.hpp"
 #include "cds/aotClassInitializer.hpp"
 #include "cds/aotLinkedClassBulkLoader.hpp"
 #include "cds/archiveBuilder.hpp"
 #include "cds/cdsConfig.hpp"
 #include "cds/heapShared.hpp"
 #include "cds/regeneratedClasses.hpp"
+#include "classfile/moduleEntry.hpp"
 #include "classfile/symbolTable.hpp"
 #include "classfile/systemDictionaryShared.hpp"
+#include "classfile/vmClasses.hpp"
 #include "classfile/vmSymbols.hpp"
 #include "dumpTimeClassInfo.inline.hpp"
 #include "memory/resourceArea.hpp"
@@ -236,6 +239,24 @@ bool AOTClassInitializer::can_archive_initialized_mirror(InstanceKlass* ik) {
 #endif
 
   return false;
+}
+
+bool AOTClassInitializer::_has_archived_vector_api_state = false;
+
+bool AOTClassInitializer::is_vector_api_class(const InstanceKlass* ik) {
+  if (!ik->has_aot_safe_initializer() || ik->is_hidden()) {
+    return false;
+  }
+  ModuleEntry* module = ik->module();
+  if (module != nullptr && module->name() == vmSymbols::jdk_incubator_vector()) {
+    return true;
+  }
+  // The payload classes of jdk.internal.vm.vector.VectorSupport
+  return ik == vmClasses::vector_VectorSpecies_klass() || ik->is_subclass_of(vmClasses::vector_VectorPayload_klass());
+}
+
+bool AOTClassInitializer::is_aot_initialized_for_code(InstanceKlass* ik) {
+  return AOTCacheAccess::is_early_aot_inited_class(ik) && is_vector_api_class(ik);
 }
 
 void AOTClassInitializer::call_runtime_setup(JavaThread* current, InstanceKlass* ik) {

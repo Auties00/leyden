@@ -31,6 +31,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.IntUnaryOperator;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -41,6 +42,7 @@ import static jdk.incubator.vector.VectorOperators.*;
 // -- This file was mechanically generated: Do not edit! -- //
 
 @SuppressWarnings("cast")  // warning: redundant cast
+@AOTSafeClassInitializer
 final class ByteVectorMax extends ByteVector {
     static final ByteSpecies VSPECIES =
         (ByteSpecies) ByteVector.SPECIES_MAX;
@@ -569,6 +571,7 @@ final class ByteVectorMax extends ByteVector {
 
     // Mask
 
+    @AOTSafeClassInitializer
     static final class ByteMaskMax extends AbstractMask<Byte> {
         static final int VLENGTH = VSPECIES.laneCount();    // used by the JVM
 
@@ -802,6 +805,7 @@ final class ByteVectorMax extends ByteVector {
 
     // Shuffle
 
+    @AOTSafeClassInitializer
     static final class ByteShuffleMax extends AbstractShuffle<Byte> {
         static final int VLENGTH = VSPECIES.laneCount();    // used by the JVM
 

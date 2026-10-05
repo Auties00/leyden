@@ -25,6 +25,7 @@
 package jdk.incubator.vector;
 
 import jdk.internal.misc.Unsafe;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -131,6 +132,7 @@ import java.util.Objects;
  *           the element type of a vector
  */
 @SuppressWarnings("exports")
+@AOTSafeClassInitializer
 public abstract class VectorMask<E> extends jdk.internal.vm.vector.VectorSupport.VectorMask<E> {
     VectorMask(boolean[] bits) { super(bits); }
 

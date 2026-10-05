@@ -1080,8 +1080,7 @@ uint LoadNode::hash() const {
 static bool skip_through_membars(Compile::AliasType* atp, const TypeInstPtr* tp, bool eliminate_boxing) {
   if ((atp != nullptr) && (atp->index() >= Compile::AliasIdxRaw)) {
     bool non_volatile = (atp->field() != nullptr) && !atp->field()->is_volatile();
-    bool is_stable_ary = FoldStableValues &&
-                         (tp != nullptr) && (tp->isa_aryptr() != nullptr) &&
+    bool is_stable_ary = (tp != nullptr) && (tp->isa_aryptr() != nullptr) &&
                          tp->isa_aryptr()->is_stable();
 
     return (eliminate_boxing && non_volatile) || is_stable_ary;
@@ -2123,7 +2122,7 @@ const Type* LoadNode::Value(PhaseGVN* phase) const {
     const bool off_beyond_header = (off >= min_base_off);
 
     // Try to constant-fold a stable array element.
-    if (FoldStableValues && !is_mismatched_access() && ary->is_stable()) {
+    if (!is_mismatched_access() && ary->is_stable()) {
       // Make sure the reference is not into the header and the offset is constant
       ciObject* aobj = ary->const_oop();
       if (aobj != nullptr && off_beyond_header && adr->is_AddP() && off != Type::OffsetBot) {

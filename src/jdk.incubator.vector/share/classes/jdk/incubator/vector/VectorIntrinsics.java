@@ -24,11 +24,15 @@
  */
 package jdk.incubator.vector;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 
 import java.util.Objects;
 
+@AOTSafeClassInitializer
 /*non-public*/ class VectorIntrinsics {
+    // Fixed when an AOT cache that stores this class is created; the cache is rejected
+    // when the property has another value.
     static final int VECTOR_ACCESS_OOB_CHECK =
             Integer.getInteger("jdk.incubator.vector.VECTOR_ACCESS_OOB_CHECK", 2);
 

@@ -103,6 +103,10 @@ public:
   // Tells if this oop should be made a constant.
   bool should_be_constant();
 
+  // Returns true for an archived object of a class whose fields AOT code may fold
+  // (see ciInstanceKlass::is_aot_initialized_for_code()).
+  bool is_aot_initialized_for_code();
+
   // The address which the compiler should embed into the
   // generated code to represent this oop.  This address
   // is not the true address of the oop -- it will get patched

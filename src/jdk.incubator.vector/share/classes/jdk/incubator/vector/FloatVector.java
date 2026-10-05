@@ -34,6 +34,7 @@ import java.util.function.Function;
 import jdk.internal.foreign.AbstractMemorySegmentImpl;
 import jdk.internal.misc.ScopedMemoryAccess;
 import jdk.internal.misc.Unsafe;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -49,6 +50,7 @@ import static jdk.incubator.vector.VectorOperators.*;
  * {@code float} values.
  */
 @SuppressWarnings("cast")  // warning: redundant cast
+@AOTSafeClassInitializer
 public abstract class FloatVector extends AbstractVector<Float> {
 
     FloatVector(float[] vec) {
@@ -3698,6 +3700,7 @@ public abstract class FloatVector extends AbstractVector<Float> {
      * Class representing {@link FloatVector}'s of the same {@link VectorShape VectorShape}.
      */
     /*package-private*/
+    @AOTSafeClassInitializer
     static final class FloatSpecies extends AbstractSpecies<Float> {
         private FloatSpecies(VectorShape shape,
                 Class<? extends FloatVector> vectorType,

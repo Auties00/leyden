@@ -37,6 +37,7 @@ import java.lang.constant.DynamicConstantDesc;
 import java.lang.invoke.MethodHandles;
 import java.util.Optional;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.Stable;
 
 import static java.util.Objects.requireNonNull;
@@ -75,6 +76,7 @@ import static java.util.Objects.requireNonNull;
  * @jls 8.9.3 Enum Members
  * @since   1.5
  */
+@AOTSafeClassInitializer // for hierarchy checks
 @SuppressWarnings("serial") // No serialVersionUID needed due to
                             // special-casing of enum classes.
 public abstract class Enum<E extends Enum<E>>

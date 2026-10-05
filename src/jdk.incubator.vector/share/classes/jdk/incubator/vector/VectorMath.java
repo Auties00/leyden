@@ -24,11 +24,14 @@
  */
 package jdk.incubator.vector;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
+
 /**
  * The class {@code VectorMath} contains methods for performing
  * scalar numeric operations in support of vector numeric operations.
  * @since   24
  */
+@AOTSafeClassInitializer
 public final class VectorMath {
 
     private VectorMath() {

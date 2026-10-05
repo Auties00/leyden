@@ -24,6 +24,7 @@
  */
 package jdk.incubator.vector;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Stable;
 
@@ -34,6 +35,7 @@ import static jdk.incubator.vector.VectorIntrinsics.*;
  * Local type witness for primitive types int.class, etc.
  * It caches all sorts of goodies that we can't put on java.lang.Class.
  */
+@AOTSafeClassInitializer
 enum LaneType {
     FLOAT(float.class, Float.class, float[].class, 'F', 24, Float.SIZE, float.class),
     DOUBLE(double.class, Double.class, double[].class, 'F', 53, Double.SIZE, double.class),

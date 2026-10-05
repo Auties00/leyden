@@ -28,6 +28,7 @@ import java.lang.foreign.MemorySegment;
 
 import java.nio.ByteOrder;
 import java.util.Arrays;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 
 /**
  * A
@@ -1172,6 +1173,7 @@ import java.util.Arrays;
  *
  */
 @SuppressWarnings("exports")
+@AOTSafeClassInitializer
 public abstract class Vector<E> extends jdk.internal.vm.vector.VectorSupport.Vector<E> {
 
     // This type is sealed within its package.

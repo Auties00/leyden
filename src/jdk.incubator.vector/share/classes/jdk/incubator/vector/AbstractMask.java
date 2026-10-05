@@ -26,6 +26,7 @@ package jdk.incubator.vector;
 
 import java.util.Objects;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 
 import jdk.internal.misc.Unsafe;
@@ -34,6 +35,7 @@ import jdk.internal.vm.vector.VectorSupport;
 
 import static jdk.incubator.vector.VectorOperators.*;
 
+@AOTSafeClassInitializer
 abstract class AbstractMask<E> extends VectorMask<E> {
     AbstractMask(boolean[] bits) {
         super(bits);

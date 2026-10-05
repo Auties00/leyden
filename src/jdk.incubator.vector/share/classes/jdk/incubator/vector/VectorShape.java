@@ -24,6 +24,7 @@
  */
 package jdk.incubator.vector;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Stable;
 
@@ -50,6 +51,7 @@ import jdk.internal.vm.vector.VectorSupport;
  * to select the shape that is usually preferable for
  * most uses.
  */
+@AOTSafeClassInitializer
 public enum VectorShape {
     /** Shape of length 64 bits */
     S_64_BIT(64),
@@ -60,6 +62,7 @@ public enum VectorShape {
     /** Shape of length 512 bits */
     S_512_BIT(512),
     /** Shape of maximum length supported on the platform */
+    // Depends on the CPU; an AOT cache that stores it is validated against the max vector size.
     S_Max_BIT(getMaxVectorBitSize(byte.class));
 
     final int vectorBitSize;

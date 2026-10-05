@@ -1872,6 +1872,11 @@ InstanceKlass::ClassState ciEnv::compute_init_state_for_aot_compile(InstanceKlas
     // Skip this class
     return InstanceKlass::ClassState::initialization_error;
   }
+  if (ik->is_interface() && ik->class_initializer() == nullptr) {
+    // Initializing an interface without a static initializer has no observable effect.
+    log_trace(aot, compilation)("%d: interface without <clinit>: (%s) %s", task()->compile_id(), InstanceKlass::state2name(ik->init_state()), ik->external_name());
+    return InstanceKlass::ClassState::fully_initialized;
+  }
   if (task()->method()->method_holder() == ik) {
     log_trace(aot, compilation)("%d: method_holder: (%s) %s", task()->compile_id(), InstanceKlass::state2name(ik->init_state()), ik->external_name());
     if (task()->method()->is_static_initializer()) { // Happens with -Xcomp

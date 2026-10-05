@@ -32,6 +32,7 @@
 #include "cds/lambdaProxyClassDictionary.hpp"
 #include "cds/regeneratedClasses.hpp"
 #include "classfile/systemDictionaryShared.hpp"
+#include "code/aotCodeCache.hpp"
 #include "logging/log.hpp"
 #include "memory/metaspaceClosure.hpp"
 #include "oops/instanceKlass.hpp"
@@ -149,6 +150,16 @@ void AOTArtifactFinder::find_artifacts() {
     while (_pending_aot_inited_classes->length() > 0) {
       InstanceKlass* ik = _pending_aot_inited_classes->pop();
       HeapShared::copy_and_rescan_aot_inited_mirror(ik);
+    }
+    if (AOTCodeCache::is_dumping_code()) {
+      GrowableArray<InstanceKlass*> classes;
+      _aot_inited_classes->iterate_all([&] (Klass* k, bool& value) {
+        InstanceKlass* ik = InstanceKlass::cast(k);
+        if (AOTClassInitializer::is_aot_initialized_for_code(ik)) {
+          classes.append(ik);
+        }
+      });
+      HeapShared::root_static_objects_for_aot_code(&classes);
     }
   }
 #endif

@@ -2119,7 +2119,7 @@ MapArchiveResult AOTMetaspace::map_archive(FileMapInfo* mapinfo, char* mapped_ba
     return MAP_ARCHIVE_SUCCESS; // The dynamic archive has not been specified. No error has happened -- trivially succeeded.
   }
 
-  if (!mapinfo->validate_aot_class_linking()) {
+  if (!mapinfo->validate_aot_class_linking() || !mapinfo->validate_vector_api_state()) {
     return MAP_ARCHIVE_OTHER_FAILURE;
   }
 

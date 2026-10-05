@@ -22,6 +22,7 @@
  *
  */
 
+#include "cds/aotClassInitializer.hpp"
 #include "ci/ciField.hpp"
 #include "ci/ciInstance.hpp"
 #include "ci/ciInstanceKlass.hpp"
@@ -842,3 +843,9 @@ bool ciInstanceKlass::debug_stable_field_at(int offset) {
   return false;
 }
 #endif
+
+bool ciInstanceKlass::is_aot_initialized_for_code() {
+  bool result = false;
+  GUARDED_VM_ENTRY(result = AOTClassInitializer::is_aot_initialized_for_code(get_instanceKlass());)
+  return result;
+}

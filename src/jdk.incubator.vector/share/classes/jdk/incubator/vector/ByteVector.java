@@ -34,6 +34,7 @@ import java.util.function.Function;
 import jdk.internal.foreign.AbstractMemorySegmentImpl;
 import jdk.internal.misc.ScopedMemoryAccess;
 import jdk.internal.misc.Unsafe;
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.vector.VectorSupport;
 
@@ -49,6 +50,7 @@ import static jdk.incubator.vector.VectorOperators.*;
  * {@code byte} values.
  */
 @SuppressWarnings("cast")  // warning: redundant cast
+@AOTSafeClassInitializer
 public abstract class ByteVector extends AbstractVector<Byte> {
 
     ByteVector(byte[] vec) {
@@ -4246,6 +4248,7 @@ public abstract class ByteVector extends AbstractVector<Byte> {
      * Class representing {@link ByteVector}'s of the same {@link VectorShape VectorShape}.
      */
     /*package-private*/
+    @AOTSafeClassInitializer
     static final class ByteSpecies extends AbstractSpecies<Byte> {
         private ByteSpecies(VectorShape shape,
                 Class<? extends ByteVector> vectorType,

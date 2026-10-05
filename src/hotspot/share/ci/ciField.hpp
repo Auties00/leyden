@@ -49,6 +49,7 @@ private:
   ciType*          _type;
   int              _offset;
   bool             _is_constant;
+  bool             _is_aot_stable_candidate; // a stable field constant only where fold_stable_values()
   ciMethod*        _known_to_link_with_put;
   ciInstanceKlass* _known_to_link_with_get;
   ciConstant       _constant_value;
@@ -136,7 +137,7 @@ public:
   //
   // A user should also check the field value (constant_value().is_valid()), since
   // constant fields of non-initialized classes don't have values yet.
-  bool is_constant() const { return _is_constant; }
+  bool is_constant() const { return _is_constant || (_is_aot_stable_candidate && fold_stable_values()); }
 
   // Get the constant value of the static field.
   ciConstant constant_value();
@@ -167,6 +168,9 @@ public:
   bool is_static               () const { return flags().is_static(); }
   bool is_final                () const { return flags().is_final(); }
   bool is_stable               () const { return flags().is_stable(); }
+  // Returns true if a non-default value of a stable field of the holder may be folded: with
+  // FoldStableValues, or in AOT compilations for AOT-initialized Vector API classes.
+  bool fold_stable_values() const;
   bool is_volatile             () const { return flags().is_volatile(); }
   bool is_transient            () const { return flags().is_transient(); }
   // The field is modified outside of instance initializer methods

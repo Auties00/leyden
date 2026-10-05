@@ -28,6 +28,7 @@ import java.util.function.IntFunction;
 import java.util.HashMap;
 import java.util.ArrayList;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 import jdk.internal.vm.annotation.Stable;
 
@@ -115,6 +116,7 @@ import static jdk.internal.vm.vector.Utils.isNonCapturingLambda;
  * operations on individual lane values.
  *
  */
+@AOTSafeClassInitializer
 public abstract class VectorOperators {
     private VectorOperators() { }
 
@@ -831,6 +833,7 @@ public abstract class VectorOperators {
                                     kind, dom, ran);
     }
 
+    @AOTSafeClassInitializer
     private abstract static class OperatorImpl implements Operator {
         private final String symName;
         private final String opName;
@@ -956,6 +959,7 @@ public abstract class VectorOperators {
         }
     }
 
+    @AOTSafeClassInitializer
     private static class UnaryImpl extends OperatorImpl implements Unary {
         private UnaryImpl(String symName, String opName, int opInfo) {
             super(symName, opName, opInfo);
@@ -963,6 +967,7 @@ public abstract class VectorOperators {
         }
     }
 
+    @AOTSafeClassInitializer
     private static class BinaryImpl extends OperatorImpl implements Binary {
         private BinaryImpl(String symName, String opName, int opInfo) {
             super(symName, opName, opInfo);
@@ -970,6 +975,7 @@ public abstract class VectorOperators {
         }
     }
 
+    @AOTSafeClassInitializer
     private static class TernaryImpl extends OperatorImpl implements Ternary {
         private TernaryImpl(String symName, String opName, int opInfo) {
             super(symName, opName, opInfo);
@@ -977,6 +983,7 @@ public abstract class VectorOperators {
         }
     }
 
+    @AOTSafeClassInitializer
     private static class AssociativeImpl extends BinaryImpl implements Associative {
         private AssociativeImpl(String symName, String opName, int opInfo) {
             super(symName, opName, opInfo);
@@ -984,8 +991,8 @@ public abstract class VectorOperators {
     }
 
     /*package-private*/
-    static
-    class ConversionImpl<E,F> extends OperatorImpl
+    @AOTSafeClassInitializer
+    static class ConversionImpl<E,F> extends OperatorImpl
                               implements Conversion<E,F> {
         private ConversionImpl(String symName, String opName, int opInfo,
                                char kind, Class<E> dom, Class<F> ran) {
@@ -1260,6 +1267,7 @@ public abstract class VectorOperators {
         }
     }
 
+    @AOTSafeClassInitializer
     private static class TestImpl extends OperatorImpl implements Test {
         private TestImpl(String symName, String opName, int opInfo) {
             super(symName, opName, opInfo);
@@ -1272,6 +1280,7 @@ public abstract class VectorOperators {
         }
     }
 
+    @AOTSafeClassInitializer
     private static class ComparisonImpl extends OperatorImpl implements Comparison {
         private ComparisonImpl(String symName, String opName, int opInfo) {
             super(symName, opName, opInfo);
@@ -1355,6 +1364,7 @@ public abstract class VectorOperators {
 
     // Managing behavioral information on slow paths:
     /*package-private*/
+    @AOTSafeClassInitializer
     static class ImplCache<OP extends Operator,T> {
         public ImplCache(Class<OP> whatKind,
                          Class<? extends Vector<?>> whatVec) {

@@ -71,7 +71,7 @@
 // ------------------------------------------------------------------
 // ciField::ciField
 ciField::ciField(ciInstanceKlass* klass, int index, Bytecodes::Code bc) :
-    _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
+    _is_aot_stable_candidate(false), _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
   ASSERT_IN_VM;
   CompilerThread *THREAD = CompilerThread::current();
 
@@ -189,7 +189,7 @@ ciField::ciField(ciInstanceKlass* klass, int index, Bytecodes::Code bc) :
 }
 
 ciField::ciField(fieldDescriptor *fd) :
-    _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
+    _is_aot_stable_candidate(false), _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
   ASSERT_IN_VM;
 
   // Get the field's name, signature, and type.
@@ -249,6 +249,7 @@ void ciField::initialize_from(fieldDescriptor* fd) {
   // Check to see if the field is constant.
   Klass* k = _holder->get_Klass();
   bool is_stable_field = FoldStableValues && is_stable();
+  _is_aot_stable_candidate = false;
   if ((is_final() && !has_initialized_final_update()) || is_stable_field) {
     if (is_static()) {
       // This field just may be constant.  The only case where it will
@@ -261,6 +262,7 @@ void ciField::initialize_from(fieldDescriptor* fd) {
       // it's a final non-static field of a trusted class (classes in
       // java.lang.invoke and sun.invoke packages and subpackages).
       _is_constant = is_stable_field || trust_final_nonstatic_fields(_holder);
+      _is_aot_stable_candidate = !_is_constant && is_stable();
     }
   } else {
     // For CallSite objects treat the target field as a compile time constant.
@@ -272,8 +274,18 @@ void ciField::initialize_from(fieldDescriptor* fd) {
     } else {
       // Non-final & non-stable fields are not constants.
       _is_constant = false;
+      // A stable field may still be constant in an AOT compilation, see fold_stable_values().
+      _is_aot_stable_candidate = is_stable();
     }
   }
+}
+
+bool ciField::fold_stable_values() const {
+  if (FoldStableValues) {
+    return true;
+  }
+  ciEnv* env = CURRENT_ENV;
+  return env != nullptr && env->is_aot_compile() && _holder->is_aot_initialized_for_code();
 }
 
 // ------------------------------------------------------------------
@@ -289,10 +301,10 @@ ciConstant ciField::constant_value() {
     ciInstance* mirror = _holder->java_mirror();
     _constant_value = mirror->field_value_impl(type()->basic_type(), offset_in_bytes());
   }
-  if (FoldStableValues && is_stable() && _constant_value.is_null_or_zero()) {
+  if (is_stable() && fold_stable_values() && _constant_value.is_null_or_zero()) {
     return ciConstant();
   }
-  if (!AOTCodeCache::allow_const_field(_constant_value)) {
+  if (!AOTCodeCache::allow_const_field(_holder, nullptr)) {
     return ciConstant();
   }
   return _constant_value;
@@ -305,10 +317,10 @@ ciConstant ciField::constant_value_of(ciObject* object) {
   assert(!is_static() && is_constant(), "only if field is non-static constant");
   assert(object->is_instance(), "must be instance");
   ciConstant field_value = object->as_instance()->field_value(this);
-  if (FoldStableValues && is_stable() && field_value.is_null_or_zero()) {
+  if (is_stable() && fold_stable_values() && field_value.is_null_or_zero()) {
     return ciConstant();
   }
-  if (!AOTCodeCache::allow_const_field(field_value)) {
+  if (!AOTCodeCache::allow_const_field(_holder, object)) {
     return ciConstant();
   }
   return field_value;

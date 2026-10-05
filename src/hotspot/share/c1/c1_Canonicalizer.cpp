@@ -277,7 +277,7 @@ void Canonicalizer::do_LoadIndexed    (LoadIndexed*     x) {
   StableArrayConstant* array = x->array()->type()->as_StableArrayConstant();
   IntConstant* index = x->index()->type()->as_IntConstant();
 
-  assert(array == nullptr || FoldStableValues, "not enabled");
+  assert(array == nullptr || FoldStableValues || CURRENT_ENV->is_aot_compile(), "not enabled");
 
   // Constant fold loads from stable arrays.
   if (!x->mismatched() && array != nullptr && index != nullptr) {

@@ -48,7 +48,9 @@ class AOTCodeCache;
 class AsmRemarks;
 class ciConstant;
 class ciEnv;
+class ciInstanceKlass;
 class ciMethod;
+class ciObject;
 class CodeBlob;
 class CodeOffsets;
 class CompileTask;
@@ -626,7 +628,7 @@ public:
   // It is used before AOTCodeCache is initialized.
   static bool maybe_dumping_code() NOT_CDS_RETURN_(false);
 
-  static bool allow_const_field(ciConstant& value) NOT_CDS_RETURN_(false);
+  static bool allow_const_field(ciInstanceKlass* holder, ciObject* receiver) NOT_CDS_RETURN_(false);
   static void invalidate(AOTCodeEntry* entry) NOT_CDS_RETURN;
   static AOTCodeEntry* find_code_entry(const methodHandle& method, uint comp_level) NOT_CDS_RETURN_(nullptr);
   static void preload_code(JavaThread* thread) NOT_CDS_RETURN;

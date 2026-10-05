@@ -25,6 +25,7 @@
 
 package jdk.internal.vm.vector;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.IntrinsicCandidate;
 import jdk.internal.misc.Unsafe;
 
@@ -160,8 +161,10 @@ public class VectorSupport {
 
     /* ============================================================================ */
 
+    @AOTSafeClassInitializer
     public static class VectorSpecies<E> {}
 
+    @AOTSafeClassInitializer
     public static class VectorPayload {
         private final Object payload; // array of primitives
 
@@ -174,18 +177,21 @@ public class VectorSupport {
         }
     }
 
+    @AOTSafeClassInitializer
     public static class Vector<E> extends VectorPayload {
         public Vector(Object payload) {
             super(payload);
         }
     }
 
+    @AOTSafeClassInitializer
     public static class VectorShuffle<E> extends VectorPayload {
         public VectorShuffle(Object payload) {
             super(payload);
         }
     }
 
+    @AOTSafeClassInitializer
     public static class VectorMask<E> extends VectorPayload {
         public VectorMask(Object payload) {
             super(payload);

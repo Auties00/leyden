@@ -24,6 +24,7 @@
  */
 package jdk.incubator.vector;
 
+import jdk.internal.vm.annotation.AOTSafeClassInitializer;
 import jdk.internal.vm.annotation.ForceInline;
 
 import java.lang.foreign.MemorySegment;
@@ -136,6 +137,7 @@ import java.util.function.IntUnaryOperator;
  *           the element type of a vector
  */
 @SuppressWarnings("exports")
+@AOTSafeClassInitializer
 public abstract class VectorShuffle<E> extends jdk.internal.vm.vector.VectorSupport.VectorShuffle<E> {
     VectorShuffle(Object indices) {
         super(indices);
