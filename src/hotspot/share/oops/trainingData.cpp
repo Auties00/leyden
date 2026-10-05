@@ -346,6 +346,7 @@ void KlassTrainingData::prepare(Visitor& visitor) {
   }
   visitor.visit(this);
   _comp_deps.prepare();
+  _static_values.prepare();
 }
 
 void MethodTrainingData::prepare(Visitor& visitor) {
@@ -442,6 +443,37 @@ void KlassTrainingData::print_on(outputStream* st, bool name_only) const {
       _comp_deps.at(i)->print_on(st, true);
     }
   }
+  for (int i = 0, len = _static_values.length(); i < len; i++) {
+    StaticFieldValue v = _static_values.at(i);
+    st->print(" static@%d:%d:" JLONG_FORMAT, v.offset(), v.kind(), v.bits());
+    if (v.klass() != nullptr) {
+      st->print(":");
+      v.klass()->name()->print_symbol_on(st);
+    }
+  }
+}
+
+void KlassTrainingData::record_static_value(InstanceKlass* holder, const StaticFieldValue& value) {
+  TrainingDataLocker l;
+  if (!l.can_add()) {
+    return;
+  }
+  KlassTrainingData* ktd = make(holder);
+  if (ktd != nullptr) {
+    ktd->_static_values.append_if_missing(value);
+  }
+}
+
+bool KlassTrainingData::find_static_value(int offset, StaticFieldValue* result) const {
+  TrainingDataLocker l;
+  for (int i = 0; i < _static_values.length(); i++) {
+    StaticFieldValue v = _static_values.at(i);
+    if (v.offset() == offset) {
+      *result = v;
+      return true;
+    }
+  }
+  return false;
 }
 
 KlassTrainingData::KlassTrainingData(InstanceKlass* klass) : TrainingData(klass) {
@@ -567,6 +599,22 @@ void KlassTrainingData::cleanup(Visitor& visitor) {
       _holder = nullptr;
       key()->make_empty();
     }
+  }
+  // Static values are kept only when one of them is a Vector API value, and when none refers
+  // to a class that is not stored.
+  bool has_vector_value = false;
+  bool has_excluded_class = false;
+  for (int i = 0; i < _static_values.length(); i++) {
+    InstanceKlass* k = _static_values.at(i).klass();
+    if (k != nullptr) {
+      has_vector_value = true;
+      if (!k->is_loaded() || (CDSConfig::is_at_aot_safepoint() && SystemDictionaryShared::should_be_excluded(k))) {
+        has_excluded_class = true;
+      }
+    }
+  }
+  if (_static_values.length() > 0 && (!has_holder() || !has_vector_value || has_excluded_class)) {
+    _static_values.reset();
   }
   for (int i = 0; i < _comp_deps.length(); i++) {
     _comp_deps.at(i)->cleanup(visitor);
@@ -748,6 +796,7 @@ void KlassTrainingData::metaspace_pointers_do(MetaspaceClosure* iter) {
   log_trace(aot, training)("Iter(KlassTrainingData): %p", this);
   TrainingData::metaspace_pointers_do(iter);
   _comp_deps.metaspace_pointers_do(iter);
+  _static_values.metaspace_pointers_do(iter);
   iter->push(&_holder);
 }
 
@@ -786,6 +835,7 @@ void TrainingData::DepList<T>::prepare() {
 void KlassTrainingData::remove_unshareable_info() {
   TrainingData::remove_unshareable_info();
   _comp_deps.remove_unshareable_info();
+  _static_values.remove_unshareable_info();
 }
 
 void MethodTrainingData::remove_unshareable_info() {

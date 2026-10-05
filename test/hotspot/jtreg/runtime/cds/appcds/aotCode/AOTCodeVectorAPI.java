@@ -33,6 +33,7 @@
  * @build AOTCodeVectorAPI
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
  *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
  * @run driver AOTCodeVectorAPI holder
  */
 
@@ -48,6 +49,7 @@
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar WhiteBox.jar jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
  *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
  * @run driver AOTCodeVectorAPI jdk
  */
 
@@ -64,6 +66,7 @@
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar WhiteBox.jar jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
  *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
  * @run driver AOTCodeVectorAPI jdk -XX:+UseSerialGC -XX:-UseCompressedOops
  */
 
@@ -79,6 +82,7 @@
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar WhiteBox.jar jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
  *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
  * @run driver AOTCodeVectorAPI onestep
  */
 
@@ -94,6 +98,7 @@
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar WhiteBox.jar jdk.test.whitebox.WhiteBox
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
  *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
  * @run driver AOTCodeVectorAPI ops
  */
 
@@ -108,6 +113,7 @@
  * @build AOTCodeVectorAPI
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
  *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
  * @run driver AOTCodeVectorAPI validation
  */
 
@@ -121,7 +127,40 @@
  * @build AOTCodeVectorAPI
  * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
  *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
  * @run driver AOTCodeVectorAPI allclasses
+ */
+
+/*
+ * @test id=speculation
+ * @summary AOT code speculates on the static finals of an application class that hold Vector API
+ *          values, and stops using the AOT code of a method when a speculation fails.
+ * @requires vm.cds.supports.aot.code.caching
+ * @requires vm.compiler2.enabled
+ * @requires vm.flagless
+ * @modules jdk.incubator.vector
+ * @library /test/lib
+ * @build AOTCodeVectorAPI
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
+ *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
+ * @run driver AOTCodeVectorAPI speculation
+ */
+
+/*
+ * @test id=nonvector
+ * @summary The AOT code of an application without Vector API values does not speculate on its
+ *          static finals, so it is used when their values change.
+ * @requires vm.cds.supports.aot.code.caching
+ * @requires vm.compiler2.enabled
+ * @requires vm.flagless
+ * @modules jdk.incubator.vector
+ * @library /test/lib
+ * @build AOTCodeVectorAPI
+ * @run driver jdk.test.lib.helpers.ClassFileInstaller -jar app.jar
+ *             VectorKernels VectorKernels$Holder VectorKernels$Jdk VectorKernels$Ops
+ *             VectorKernels$Spec VectorKernels$Plain
+ * @run driver AOTCodeVectorAPI nonvector
  */
 
 import jdk.incubator.vector.ByteVector;
@@ -167,6 +206,8 @@ public class AOTCodeVectorAPI {
             case "ops" -> stored("ops", false, vmArgs);
             case "validation" -> validation();
             case "allclasses" -> allClasses();
+            case "speculation" -> speculation();
+            case "nonvector" -> nonVector();
             default -> throw new RuntimeException("unknown scenario " + scenario);
         }
     }
@@ -178,8 +219,10 @@ public class AOTCodeVectorAPI {
     // The result of the kernel computed without an AOT cache.
     static String expectedSum(String kernel, String... vmArgs) throws Exception {
         List<String> cmd = new ArrayList<>();
-        cmd.add("--add-modules");
-        cmd.add("jdk.incubator.vector");
+        if (!kernel.equals("plain")) {
+            cmd.add("--add-modules");
+            cmd.add("jdk.incubator.vector");
+        }
         cmd.addAll(List.of(vmArgs));
         cmd.addAll(List.of("-cp", "app.jar", "VectorKernels", kernel, PRODUCTION_ROUNDS, "nogc"));
         OutputAnalyzer out = ProcessTools.executeTestJava(cmd.toArray(new String[0]));
@@ -203,13 +246,18 @@ public class AOTCodeVectorAPI {
 
         @Override
         public String[] vmArgs(RunMode runMode) {
-            List<String> args = new ArrayList<>(List.of("--add-modules", "jdk.incubator.vector"));
+            List<String> args = new ArrayList<>();
+            if (!kernel.equals("plain")) {
+                args.addAll(List.of("--add-modules", "jdk.incubator.vector"));
+            }
             args.addAll(List.of(extraVmArgs));
-            if (runMode == RunMode.ASSEMBLY) {
-                args.addAll(List.of("-XX:+PrintCompilation", "-Xlog:aot+codecache=info",
+            if (runMode == RunMode.TRAINING) {
+                args.add("-Xlog:aot+training=debug");
+            } else if (runMode == RunMode.ASSEMBLY) {
+                args.addAll(List.of("-XX:+PrintCompilation", "-Xlog:aot+codecache=debug",
                                     "-Xlog:aot+codecache+nmethod=info"));
             } else if (runMode == RunMode.PRODUCTION) {
-                args.add("-Xlog:aot+codecache+nmethod=info");
+                args.addAll(List.of("-Xlog:aot+codecache+nmethod=info", "-Xlog:aot+codecache+deoptimization=info"));
             }
             return args.toArray(new String[0]);
         }
@@ -237,6 +285,7 @@ public class AOTCodeVectorAPI {
                 if (runMode == RunMode.ASSEMBLY) {
                     out.shouldMatch("Wrote nmethod '" + method + "\\(.*' \\(for preload\\)");
                     out.shouldNotMatch(method + ".*COMPILE SKIPPED");
+                    out.shouldNotContain("speculation guard");
                 } else if (runMode == RunMode.PRODUCTION) {
                     out.shouldContain(expected);
                 }
@@ -312,6 +361,95 @@ public class AOTCodeVectorAPI {
     static void allClasses() throws Exception {
         Tester t = new Tester("allclasses");
         t.runAOTWorkflow("AOT", "--two-step-training");
+    }
+
+    // The static finals of VectorKernels.Spec, the property that changes each one in production and
+    // the kind of value recorded in training.
+    static final String[][] SPECULATED = {
+        {"SP", null, "2"},
+        {"EARLY", null, "1"},
+        {"SCALE", "-Dspec.scale=4", "1"},
+        {"BIAS", "-Dspec.bias=6", "1"},
+        {"NEGATE", "-Dspec.negate=true", "1"},
+        {"WEIGHT", "-Dspec.negzero=true", "1"},
+        {"VCLASS", "-Dspec.altclass=true", "4"},
+        {"ONES", "-Dspec.nullones=true", "3"},
+        {"TWOS", "-Dspec.alttwos=true", "3"},
+    };
+
+    // AOT code speculates on the values that the static finals of VectorKernels.Spec had in
+    // training. While they hold, the AOT code is used; when one differs, the method that read it
+    // and the method whose code inlined it are no longer run with AOT code.
+    static void speculation() throws Exception {
+        String method = kernelMethod("spec");
+        String expected = expectedSum("spec");
+        Tester t = new Tester("spec") {
+            @Override
+            public void checkExecution(OutputAnalyzer out, RunMode runMode) throws Exception {
+                if (runMode == RunMode.TRAINING) {
+                    for (String[] f : SPECULATED) {
+                        out.shouldMatch("Static final VectorKernels\\$Spec\\." + f[0] + ": kind " + f[2] + " ");
+                    }
+                } else if (runMode == RunMode.ASSEMBLY) {
+                    out.shouldMatch("Wrote nmethod '" + method + "\\(");
+                    for (String[] f : SPECULATED) {
+                        out.shouldMatch("Speculating on static final VectorKernels\\$Spec\\." + f[0] + " ");
+                    }
+                    out.shouldMatch("AOT compile [0-9]+ \\((preload|regular)\\) of " + method + ".* has [0-9]+ speculation guard");
+                }
+            }
+        };
+        t.runAOTWorkflow("AOT", "--two-step-training");
+        OutputAnalyzer out = t.productionRun();
+        out.shouldContain(expected);
+        out.shouldNotContain("Speculation failed");
+
+        // EARLY is computed in the static initializer, which calls scaled() before SCALE is
+        // assigned: the preload code of scaled() then sees SCALE as 0 and leaves the call to the
+        // interpreter without failing the speculation.
+        out = t.productionRun(new String[] {"-XX:+UnlockDiagnosticVMOptions", "-XX:+PreloadBlocking",
+                                            "-Xlog:deoptimization=debug"});
+        out.shouldContain(expected);
+        out.shouldMatch("VectorKernels\\$Spec::scaled.* uninitialized none");
+        out.shouldNotContain("Speculation failed");
+
+        for (String[] f : SPECULATED) {
+            if (f[1] == null) {
+                continue;
+            }
+            out = t.productionRun(new String[] {f[1]});
+            out.shouldContain(expectedSum("spec", f[1]));
+            String stdout = out.getStdout();
+            Matcher failed = Pattern.compile("Speculation failed: no more AOT code for [^\\n]*VectorKernels\\$Spec\\.dot").matcher(stdout);
+            if (!failed.find()) {
+                throw new RuntimeException("no failed speculation on " + f[0]);
+            }
+            // The AOT code of the method is not loaded again.
+            if (Pattern.compile("(Read|Preloading) nmethod '" + method + "\\(").matcher(stdout.substring(failed.end())).find()) {
+                throw new RuntimeException("AOT code of " + method + " loaded after the speculation on " + f[0] + " failed");
+            }
+        }
+    }
+
+    // VectorKernels.Plain has no Vector API value: its AOT code reads its static final, and is
+    // used when the value differs from training.
+    static void nonVector() throws Exception {
+        String method = kernelMethod("plain");
+        Tester t = new Tester("plain") {
+            @Override
+            public void checkExecution(OutputAnalyzer out, RunMode runMode) throws Exception {
+                if (runMode == RunMode.ASSEMBLY) {
+                    out.shouldMatch("Wrote nmethod '" + method + "\\(");
+                    out.shouldNotContain("Speculating on static final");
+                    out.shouldNotContain("speculation guard");
+                }
+            }
+        };
+        t.runAOTWorkflow("AOT", "--two-step-training");
+        OutputAnalyzer out = t.productionRun(new String[] {"-Dspec.scale=4"});
+        out.shouldContain(expectedSum("plain", "-Dspec.scale=4"));
+        out.shouldMatch("(Read|Preloading) nmethod '" + method + "\\(");
+        out.shouldNotContain("Speculation failed");
     }
 
     // A kernel whose species is held in an instance field cannot have its intrinsics inlined in
@@ -431,11 +569,81 @@ class VectorKernels {
         }
     }
 
+    // An application class with static finals of each kind that AOT code speculates on.
+    static class Spec {
+        static final int EARLY = early();
+        static final VectorSpecies<Integer> SP = IntVector.SPECIES_PREFERRED;
+        static final int SCALE = Integer.getInteger("spec.scale", 3);
+        static final long BIAS = Long.getLong("spec.bias", 5L);
+        static final boolean NEGATE = Boolean.getBoolean("spec.negate");
+        static final double WEIGHT = Boolean.getBoolean("spec.negzero") ? -0.0 : 0.0;
+        static final Class<?> VCLASS = Boolean.getBoolean("spec.altclass") ? LongVector.class : IntVector.class;
+        static final IntVector ONES = Boolean.getBoolean("spec.nullones") ? null : IntVector.broadcast(SP, 1);
+        // A vector of another exact class when the property is set.
+        static final IntVector TWOS = Boolean.getBoolean("spec.alttwos")
+                ? IntVector.broadcast(SP.length() == 2 ? IntVector.SPECIES_128 : IntVector.SPECIES_64, 2)
+                : IntVector.broadcast(SP, 2);
+
+        // Runs before SCALE is assigned.
+        static int early() {
+            int s = 0;
+            for (int i = 0; i < 2000; i++) {
+                s += scaled(i) + 1;
+            }
+            return s;
+        }
+
+        static int scaled(int x) {
+            return x * SCALE;
+        }
+
+        static int dot(int[] a, int[] b) {
+            var acc = IntVector.zero(SP);
+            var i = 0;
+            for (; i <= a.length - SP.length(); i += SP.length()) {
+                acc = IntVector.fromArray(SP, a, i).mul(IntVector.fromArray(SP, b, i)).add(acc);
+            }
+            long s = acc.reduceLanes(VectorOperators.ADD);
+            for (; i < a.length; i++) {
+                s += a[i] * b[i];
+            }
+            s = scaled((int) s) + BIAS + EARLY;
+            if (NEGATE) {
+                s = -s;
+            }
+            if (1.0 / WEIGHT < 0) {
+                s += 7;
+            }
+            if (VCLASS != IntVector.class) {
+                s += 11;
+            }
+            var ones = ONES;
+            s += (ones == null) ? 13 : ones.reduceLanes(VectorOperators.ADD);
+            s += TWOS.reduceLanes(VectorOperators.ADD) * 17;
+            return (int) s;
+        }
+    }
+
+    // An application class without Vector API values.
+    static class Plain {
+        static final int SCALE = Integer.getInteger("spec.scale", 3);
+
+        static int dot(int[] a, int[] b) {
+            int s = 0;
+            for (int i = 0; i < a.length; i++) {
+                s += a[i] * b[i];
+            }
+            return s * SCALE;
+        }
+    }
+
     static int dot(String kernel, int[] a, int[] b) {
         return switch (kernel) {
             case "jdk", "allclasses" -> Jdk.dot(a, b);
             case "ops" -> Ops.dot(a, b);
             case "holder" -> Holder.dot(a, b);
+            case "spec" -> Spec.dot(a, b);
+            case "plain" -> Plain.dot(a, b);
             default -> throw new IllegalArgumentException(kernel);
         };
     }

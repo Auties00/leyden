@@ -26,9 +26,11 @@
 #include "interpreter/linkResolver.hpp"
 #include "memory/universe.hpp"
 #include "oops/objArrayKlass.hpp"
+#include "oops/trainingData.hpp"
 #include "opto/addnode.hpp"
 #include "opto/castnode.hpp"
 #include "opto/memnode.hpp"
+#include "opto/movenode.hpp"
 #include "opto/parse.hpp"
 #include "opto/rootnode.hpp"
 #include "opto/runtime.hpp"
@@ -121,6 +123,9 @@ void Parse::do_get_xxx(Node* obj, ciField* field, bool is_field) {
       push_node(field->layout_type(), con);
       return;
     }
+    if (!is_field && speculate_static_field(obj, field)) {
+      return;
+    }
   }
 
   ciType* field_klass = field->type();
@@ -196,6 +201,139 @@ void Parse::do_get_xxx(Node* obj, ciField* field, bool is_field) {
     null_assert(peek());
     set_bci(iter().cur_bci()); // put it back
   }
+}
+
+// AOT code cannot fold the static finals of a class whose static initializer runs in the
+// production run. For the values recorded in training (see ciField::speculated_static_value()) it
+// loads the field, checks it against the recorded value and continues with that value.
+bool Parse::speculate_static_field(Node* obj, ciField* field) {
+  if (!C->env()->is_aot_compile() || !field->is_static()) {
+    return false;
+  }
+  BasicType bt = field->layout_type();
+  if (is_reference_type(bt) && !field->type()->is_loaded()) {
+    return false;
+  }
+  ciField::ciSpeculatedValue sv;
+  if (!field->speculated_static_value(&sv)) {
+    return false;
+  }
+  const Type* con_type = nullptr;
+  switch (sv._kind) {
+    case KlassTrainingData::StaticFieldValue::Primitive:
+      switch (bt) {
+        case T_BOOLEAN: case T_CHAR: case T_BYTE: case T_SHORT: case T_INT:
+          con_type = TypeInt::make((jint)sv._bits);
+          break;
+        case T_LONG:
+          con_type = TypeLong::make(sv._bits);
+          break;
+        case T_FLOAT:
+          con_type = TypeF::make(jfloat_cast((jint)sv._bits));
+          break;
+        case T_DOUBLE:
+          con_type = TypeD::make(jdouble_cast(sv._bits));
+          break;
+        default:
+          return false;
+      }
+      break;
+    case KlassTrainingData::StaticFieldValue::Species:
+    case KlassTrainingData::StaticFieldValue::VectorClass:
+      if (bt != T_OBJECT || !sv._object->klass()->is_subtype_of(field->type()->as_klass())) {
+        return false;
+      }
+      // An archived object, which is the same object in the production run.
+      con_type = TypeOopPtr::make_from_constant(sv._object, /*require_constant*/ true);
+      break;
+    case KlassTrainingData::StaticFieldValue::VectorObject:
+      if (bt != T_OBJECT || sv._klass->is_abstract() || !sv._klass->is_subtype_of(field->type()->as_klass())) {
+        return false;
+      }
+      break;
+    default:
+      return false;
+  }
+
+  const TypePtr* adr_type = C->alias_type(field)->adr_type();
+  Node* adr = basic_plus_adr(obj, obj, field->offset_in_bytes());
+  const Type* load_type = is_reference_type(bt) ? TypeOopPtr::make_from_klass(field->type()->as_klass())
+                                                : Type::get_const_basic_type(bt);
+  DecoratorSet decorators = IN_HEAP | (field->is_volatile() ? MO_SEQ_CST : MO_UNORDERED);
+  Node* ld = access_load_at(obj, adr, adr_type, load_type, bt, decorators);
+
+  Node* result = nullptr;
+  if (con_type != nullptr) {
+    Node* cmp = nullptr;
+    switch (bt) {
+      case T_LONG:
+        cmp = new CmpLNode(ld, makecon(con_type));
+        break;
+      case T_FLOAT:
+        // Compare the bits: exact for NaN and -0.0f.
+        cmp = new CmpINode(_gvn.transform(new MoveF2INode(ld)), intcon((jint)sv._bits));
+        break;
+      case T_DOUBLE:
+        cmp = new CmpLNode(_gvn.transform(new MoveD2LNode(ld)), longcon(sv._bits));
+        break;
+      case T_OBJECT:
+        cmp = new CmpPNode(ld, makecon(con_type));
+        break;
+      default:
+        cmp = new CmpINode(ld, makecon(con_type));
+        break;
+    }
+    Node* bol = _gvn.transform(new BoolNode(_gvn.transform(cmp), BoolTest::eq));
+    {
+      BuildCutout unless(this, bol, PROB_MAX);
+      speculation_failed(field->holder());
+    }
+    result = makecon(con_type);
+  } else {
+    Node* cmp = _gvn.transform(new CmpPNode(ld, null()));
+    Node* bol = _gvn.transform(new BoolNode(cmp, BoolTest::ne));
+    {
+      BuildCutout unless(this, bol, PROB_MAX);
+      speculation_failed(field->holder());
+    }
+    Node* not_null = cast_not_null(ld, false);
+    Node* casted = not_null;
+    Node* fail = type_check_receiver(not_null, sv._klass, PROB_MAX, &casted);
+    {
+      PreserveJVMState pjvms(this);
+      set_control(fail);
+      speculation_failed(field->holder());
+    }
+    result = casted;
+  }
+  if (stopped()) {
+    return true;
+  }
+  C->add_speculation_guard();
+  push_node(bt, result);
+  return true;
+}
+
+// The value of the field differs from the one recorded in training. When the holder is fully
+// initialized the speculation was wrong: the code is made not entrant, and no AOT code of the
+// method is used again (see Deoptimization::uncommon_trap_inner()). While the holder's static
+// initializer runs, the field can still hold its default value, so only this execution continues
+// in the interpreter.
+void Parse::speculation_failed(ciInstanceKlass* holder) {
+  Node* klass = makecon(TypeKlassPtr::make(holder, Type::trust_interfaces));
+  Node* adr = basic_plus_adr(top(), klass, in_bytes(InstanceKlass::init_state_offset()));
+  Node* init_state = _gvn.transform(LoadNode::make(_gvn, nullptr, immutable_memory(), adr,
+                                                   adr->bottom_type()->is_ptr(), TypeInt::BYTE,
+                                                   T_BYTE, MemNode::acquire));
+  Node* cmp = _gvn.transform(new CmpINode(init_state, intcon(InstanceKlass::fully_initialized)));
+  Node* bol = _gvn.transform(new BoolNode(cmp, BoolTest::eq));
+  {
+    BuildCutout unless(this, bol, PROB_MAX);
+    uncommon_trap(Deoptimization::Reason_uninitialized, Deoptimization::Action_none,
+                  nullptr, "static final read during its class initialization");
+  }
+  uncommon_trap(Deoptimization::Reason_constraint, Deoptimization::Action_make_not_entrant,
+                nullptr, "static final speculation failed");
 }
 
 void Parse::do_put_xxx(Node* obj, ciField* field, bool is_field) {

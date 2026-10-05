@@ -44,6 +44,7 @@ MethodCounters::MethodCounters(const methodHandle& mh) :
 #if INCLUDE_CDS
   set_aot_code_invocation_count(0);
   set_aot_preload_code_entry(nullptr);
+  _aot_code_disabled = 0;
 #endif
   set_interpreter_throwout_count(0);
   JVMTI_ONLY(clear_number_of_breakpoints());
@@ -115,6 +116,7 @@ void MethodCounters::set_aot_preload_code_entry(AOTCodeEntry* entry) {
 }
 
 void MethodCounters::remove_unshareable_info() {
+  _aot_code_disabled = 0;
 }
 void MethodCounters::restore_unshareable_info(TRAPS) {
   _method_training_data = method_training_data_sentinel();

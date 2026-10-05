@@ -542,6 +542,8 @@ class Parse : public GraphKit {
 
   // common code for actually performing the load or store
   void do_get_xxx(Node* obj, ciField* field, bool is_field);
+  bool speculate_static_field(Node* obj, ciField* field);
+  void speculation_failed(ciInstanceKlass* holder);
   void do_put_xxx(Node* obj, ciField* field, bool is_field);
 
   // implementation of object creation bytecodes

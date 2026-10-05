@@ -391,6 +391,13 @@ private:
       }
       _deps = nullptr;
     }
+    // Drops all elements, also after the snapshot.
+    void reset() {
+      TrainingDataLocker::assert_locked_or_snapshotted();
+      delete _deps_dyn;
+      _deps_dyn = nullptr;
+      _deps = nullptr;
+    }
     void append(E dep) {
       TrainingDataLocker::assert_can_add();
       copy_on_write_if_necessary();
@@ -457,6 +464,39 @@ class KlassTrainingData : public TrainingData {
 
   DepList<CompileTrainingData*> _comp_deps; // compiles that depend on me
 
+ public:
+  // The value a training compilation folded for a static final field of this class, described
+  // by what an AOT compilation can check against the value of the production run.
+  class StaticFieldValue : public MetaspaceObj {
+  public:
+    enum Kind {
+      Primitive    = 1, // a primitive value, as the bits of a jlong
+      Species      = 2, // a Vector API species, identified by its vector class
+      VectorObject = 3, // a vector, mask or shuffle, identified by its exact class
+      VectorClass  = 4  // the mirror of a Vector API class
+    };
+  private:
+    int            _offset;
+    int            _kind;
+    jlong          _bits;
+    InstanceKlass* _klass;
+  public:
+    StaticFieldValue() : _offset(0), _kind(0), _bits(0), _klass(nullptr) {}
+    StaticFieldValue(int offset, Kind kind, jlong bits, InstanceKlass* klass)
+      : _offset(offset), _kind(kind), _bits(bits), _klass(klass) {}
+    int offset() const { return _offset; }
+    Kind kind() const { return (Kind)_kind; }
+    jlong bits() const { return _bits; }
+    InstanceKlass* klass() const { return _klass; }
+    bool operator==(const StaticFieldValue& that) const { return _offset == that._offset; }
+    void metaspace_pointers_do(MetaspaceClosure* iter) { iter->push(&_klass); }
+  };
+
+ private:
+  // Static final values folded by training compilations. Kept only for classes with a Vector API
+  // value; see ciField::speculated_static_value().
+  DepList<StaticFieldValue> _static_values;
+
   KlassTrainingData();
   KlassTrainingData(InstanceKlass* klass);
 
@@ -492,6 +532,11 @@ class KlassTrainingData : public TrainingData {
   virtual KlassTrainingData* as_KlassTrainingData() const { return const_cast<KlassTrainingData*>(this); };
 
   void notice_fully_initialized() NOT_CDS_RETURN;
+
+  // Records the value a training compilation folded for a static final field of holder.
+  static void record_static_value(InstanceKlass* holder, const StaticFieldValue& value) NOT_CDS_RETURN;
+  // Looks up the value recorded for the static field at offset.
+  bool find_static_value(int offset, StaticFieldValue* result) const;
 
   void print_on(outputStream* st, bool name_only) const;
   virtual void print_on(outputStream* st) const { print_on(st, false); }

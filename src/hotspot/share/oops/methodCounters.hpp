@@ -28,6 +28,7 @@
 #include "compiler/compilerDefinitions.hpp"
 #include "interpreter/invocationCounter.hpp"
 #include "oops/metadata.hpp"
+#include "runtime/atomicAccess.hpp"
 #include "utilities/align.hpp"
 
 class AOTCodeEntry;
@@ -69,6 +70,9 @@ class MethodCounters : public Metadata {
 #endif
   u1                _highest_comp_level;          // Highest compile level this method has ever seen.
   u1                _highest_osr_comp_level;      // Same for OSR level
+#if INCLUDE_CDS
+  volatile u1       _aot_code_disabled;           // Do not load AOT code for this method again
+#endif
 
   MethodCounters(const methodHandle& mh);
   MethodCounters();
@@ -180,6 +184,8 @@ class MethodCounters : public Metadata {
   int  aot_code_invocation_count() const         { return _aot_code_invocation_count;}
   void set_aot_code_invocation_count(int count)  { _aot_code_invocation_count = count; }
   bool aot_code_recompile_requested() const      { return (_aot_code_invocation_count & 1) != 0;}
+  void disable_aot_code()                        { AtomicAccess::store(&_aot_code_disabled, (u1)1); }
+  bool aot_code_disabled() const                 { return AtomicAccess::load(&_aot_code_disabled) != 0; }
 
   void set_aot_preload_code_entry(AOTCodeEntry* entry);
   AOTCodeEntry* aot_preload_code_entry() const   {

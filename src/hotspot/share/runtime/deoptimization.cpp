@@ -51,6 +51,7 @@
 #include "oops/constantPool.hpp"
 #include "oops/fieldStreams.inline.hpp"
 #include "oops/method.hpp"
+#include "oops/methodCounters.hpp"
 #include "oops/objArrayKlass.hpp"
 #include "oops/objArrayOop.inline.hpp"
 #include "oops/oop.inline.hpp"
@@ -2051,6 +2052,19 @@ static void log_deopt(nmethod* nm, Method* tm, intptr_t pc, frame& fr, int trap_
   }
 }
 
+#if INCLUDE_CDS
+static void disable_aot_code(Method* m) {
+  MethodCounters* mc = m->method_counters();
+  if (mc != nullptr && !mc->aot_code_disabled()) {
+    mc->disable_aot_code();
+    if (log_is_enabled(Info, aot, codecache, deoptimization)) {
+      ResourceMark rm;
+      log_info(aot, codecache, deoptimization)("Speculation failed: no more AOT code for %s", m->external_name());
+    }
+  }
+}
+#endif
+
 JRT_ENTRY_PROF(void, Deoptimization, uncommon_trap_inner, Deoptimization::uncommon_trap_inner(JavaThread* current, jint trap_request)) {
   HandleMark hm(current);
 
@@ -2492,6 +2506,16 @@ JRT_ENTRY_PROF(void, Deoptimization, uncommon_trap_inner, Deoptimization::uncomm
     }
 
     // Take requested actions on the method:
+
+#if INCLUDE_CDS
+    if (reason == Reason_constraint && action == Action_make_not_entrant && nm->is_aot()) {
+      // A static final speculated on in AOT code had another value (see
+      // Parse::speculate_static_field()). The other AOT code of the method, and of the method that
+      // read the field, was compiled with the same speculation.
+      disable_aot_code(nm->method());
+      disable_aot_code(trap_method());
+    }
+#endif
 
     // Recompile
     if (make_not_entrant) {

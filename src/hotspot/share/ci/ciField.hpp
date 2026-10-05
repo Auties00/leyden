@@ -50,6 +50,7 @@ private:
   int              _offset;
   bool             _is_constant;
   bool             _is_aot_stable_candidate; // a stable field constant only where fold_stable_values()
+  bool             _static_value_recorded;   // see record_static_value()
   ciMethod*        _known_to_link_with_put;
   ciInstanceKlass* _known_to_link_with_get;
   ciConstant       _constant_value;
@@ -141,6 +142,22 @@ public:
 
   // Get the constant value of the static field.
   ciConstant constant_value();
+
+  // A value an AOT compilation speculates on for a static final field of a class whose static
+  // initializer runs in the production run (see Parse::speculate_static_field()).
+  struct ciSpeculatedValue {
+    int              _kind;   // KlassTrainingData::StaticFieldValue::Kind
+    jlong            _bits;   // Primitive: the bits of the value
+    ciInstanceKlass* _klass;  // VectorObject: the exact class
+    ciObject*        _object; // Species: the archived species; VectorClass: the mirror
+  };
+  bool speculated_static_value(ciSpeculatedValue* result);
+
+private:
+  // Records, in a training run, the value folded for a static final field (see above).
+  void record_static_value(ciConstant value);
+  bool is_static_final() const { return is_static() && is_final() && !has_initialized_final_update(); }
+public:
 
   bool is_static_constant() {
     return is_static() && is_constant() && constant_value().is_valid();

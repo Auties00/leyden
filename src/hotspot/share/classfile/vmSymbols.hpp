@@ -746,6 +746,8 @@ class SerializeClosure;
   template(jdk_internal_vm_annotation_AOTRuntimeSetup_signature, "Ljdk/internal/vm/annotation/AOTRuntimeSetup;")  \
   template(runtimeSetup,                                    "runtimeSetup")                                       \
   template(assemblySetup,                                   "assemblySetup")                                      \
+  template(vectorType_name,                                 "vectorType")                                         \
+  template(VSPECIES_name,                                   "VSPECIES")                                           \
   template(VECTOR_ACCESS_OOB_CHECK_name,                    "VECTOR_ACCESS_OOB_CHECK")                            \
   template(toFileURL_name,                                  "toFileURL")                                          \
   template(toFileURL_signature,                             "(Ljava/lang/String;)Ljava/net/URL;")                 \

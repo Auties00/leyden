@@ -22,19 +22,27 @@
  *
  */
 
+#include "cds/aotCacheAccess.hpp"
+#include "cds/aotClassInitializer.hpp"
 #include "ci/ciField.hpp"
 #include "ci/ciInstanceKlass.hpp"
 #include "ci/ciSymbols.hpp"
 #include "ci/ciUtilities.inline.hpp"
 #include "classfile/javaClasses.hpp"
+#include "classfile/javaClasses.inline.hpp"
 #include "classfile/vmClasses.hpp"
 #include "code/aotCodeCache.hpp"
 #include "gc/shared/collectedHeap.inline.hpp"
 #include "interpreter/linkResolver.hpp"
+#include "logging/log.hpp"
+#include "memory/resourceArea.hpp"
+#include "oops/fieldStreams.inline.hpp"
 #include "oops/klass.inline.hpp"
 #include "oops/oop.inline.hpp"
+#include "oops/trainingData.hpp"
 #include "runtime/fieldDescriptor.inline.hpp"
 #include "runtime/handles.inline.hpp"
+#include "runtime/jniHandles.inline.hpp"
 #include "runtime/reflection.hpp"
 
 // ciField
@@ -71,7 +79,8 @@
 // ------------------------------------------------------------------
 // ciField::ciField
 ciField::ciField(ciInstanceKlass* klass, int index, Bytecodes::Code bc) :
-    _is_aot_stable_candidate(false), _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
+    _is_aot_stable_candidate(false), _static_value_recorded(false),
+    _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
   ASSERT_IN_VM;
   CompilerThread *THREAD = CompilerThread::current();
 
@@ -189,7 +198,8 @@ ciField::ciField(ciInstanceKlass* klass, int index, Bytecodes::Code bc) :
 }
 
 ciField::ciField(fieldDescriptor *fd) :
-    _is_aot_stable_candidate(false), _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
+    _is_aot_stable_candidate(false), _static_value_recorded(false),
+    _known_to_link_with_put(nullptr), _known_to_link_with_get(nullptr) {
   ASSERT_IN_VM;
 
   // Get the field's name, signature, and type.
@@ -288,6 +298,12 @@ bool ciField::fold_stable_values() const {
   return env != nullptr && env->is_aot_compile() && _holder->is_aot_initialized_for_code();
 }
 
+// The static initializer of a class of the platform or application loader runs in the production
+// run, so AOT code cannot fold its static finals.
+static bool is_initialized_at_run_time(ciInstanceKlass* holder) {
+  return !holder->uses_default_loader() && !holder->is_hidden();
+}
+
 // ------------------------------------------------------------------
 // ciField::constant_value
 // Get the constant value of a this static field.
@@ -307,7 +323,150 @@ ciConstant ciField::constant_value() {
   if (!AOTCodeCache::allow_const_field(_holder, nullptr)) {
     return ciConstant();
   }
+  if (TrainingData::need_data() && !_static_value_recorded && is_static_final() &&
+      is_initialized_at_run_time(_holder)) {
+    _static_value_recorded = true;
+    record_static_value(_constant_value);
+  }
   return _constant_value;
+}
+
+// The offset of AbstractSpecies.vectorType, found on first use.
+static int _vector_type_offset = -1;
+
+static InstanceKlass* species_vector_class(oop species) {
+  if (_vector_type_offset < 0) {
+    fieldDescriptor fd;
+    InstanceKlass* ik = InstanceKlass::cast(species->klass());
+    Klass* holder = ik->find_field(vmSymbols::vectorType_name(), vmSymbols::class_signature(), &fd);
+    assert(holder != nullptr && !fd.is_static(), "AbstractSpecies.vectorType expected");
+    if (holder == nullptr) {
+      return nullptr;
+    }
+    _vector_type_offset = fd.offset();
+  }
+  oop mirror = species->obj_field(_vector_type_offset);
+  Klass* k = (mirror != nullptr) ? java_lang_Class::as_Klass(mirror) : nullptr;
+  return (k != nullptr && k->is_instance_klass()) ? InstanceKlass::cast(k) : nullptr;
+}
+
+void ciField::record_static_value(ciConstant value) {
+  KlassTrainingData::StaticFieldValue::Kind kind = KlassTrainingData::StaticFieldValue::Primitive;
+  jlong bits = 0;
+  switch (value.basic_type()) {
+    case T_BOOLEAN: case T_CHAR: case T_BYTE: case T_SHORT: case T_INT:
+      bits = value.as_int();
+      break;
+    case T_LONG:
+      bits = value.as_long();
+      break;
+    case T_FLOAT:
+      bits = jint_cast(value.as_float());
+      break;
+    case T_DOUBLE:
+      bits = jlong_cast(value.as_double());
+      break;
+    case T_OBJECT: {
+      ciObject* o = value.as_object();
+      ciEnv* env = CURRENT_ENV;
+      if (o->is_null_object() ||
+          !(o->klass() == env->Class_klass() || o->klass()->is_subclass_of(env->vector_VectorPayload_klass()) ||
+            o->klass()->is_subclass_of(env->vector_VectorSpecies_klass()))) {
+        return;
+      }
+      break;
+    }
+    default:
+      return;
+  }
+  GUARDED_VM_ENTRY(
+    InstanceKlass* klass = nullptr;
+    if (value.basic_type() == T_OBJECT) {
+      oop o = JNIHandles::resolve(value.as_object()->constant_encoding());
+      if (java_lang_Class::is_instance(o)) {
+        Klass* k = java_lang_Class::as_Klass(o);
+        if (k == nullptr || !k->is_instance_klass() ||
+            !AOTClassInitializer::is_vector_api_class(InstanceKlass::cast(k))) {
+          return;
+        }
+        kind = KlassTrainingData::StaticFieldValue::VectorClass;
+        klass = InstanceKlass::cast(k);
+      } else if (o->klass()->is_subclass_of(vmClasses::vector_VectorSpecies_klass())) {
+        klass = species_vector_class(o);
+        if (klass == nullptr || !AOTClassInitializer::is_vector_api_class(klass)) {
+          return;
+        }
+        kind = KlassTrainingData::StaticFieldValue::Species;
+      } else if (o->klass()->is_subclass_of(vmClasses::vector_VectorPayload_klass())) {
+        kind = KlassTrainingData::StaticFieldValue::VectorObject;
+        klass = InstanceKlass::cast(o->klass());
+      } else {
+        return;
+      }
+    }
+    InstanceKlass* holder = _holder->get_instanceKlass();
+    KlassTrainingData::record_static_value(holder, KlassTrainingData::StaticFieldValue(offset_in_bytes(), kind, bits, klass));
+    if (log_is_enabled(Debug, aot, training)) {
+      ResourceMark rm;
+      log_debug(aot, training)("Static final %s.%s: kind %d bits " JLONG_FORMAT " %s", holder->external_name(),
+                               name()->as_utf8(), kind, bits, klass != nullptr ? klass->external_name() : "");
+    }
+  );
+}
+
+bool ciField::speculated_static_value(ciSpeculatedValue* result) {
+  ciEnv* env = CURRENT_ENV;
+  if (!env->is_aot_compile() || !TrainingData::have_data() || !is_static_final() ||
+      !is_initialized_at_run_time(_holder)) {
+    return false;
+  }
+  bool found = false;
+  GUARDED_VM_ENTRY(
+    InstanceKlass* holder = _holder->get_instanceKlass();
+    KlassTrainingData* ktd = KlassTrainingData::find(holder);
+    KlassTrainingData::StaticFieldValue v;
+    if (ktd == nullptr || !ktd->find_static_value(offset_in_bytes(), &v)) {
+      return false;
+    }
+    result->_kind = v.kind();
+    result->_bits = v.bits();
+    result->_klass = nullptr;
+    result->_object = nullptr;
+    const char* failure = nullptr;
+    InstanceKlass* k = v.klass();
+    if (k != nullptr && !AOTCacheAccess::can_generate_aot_code_for(k)) {
+      failure = "class not stored";
+    } else if (v.kind() == KlassTrainingData::StaticFieldValue::VectorClass) {
+      result->_object = env->get_object(k->java_mirror());
+    } else if (v.kind() == KlassTrainingData::StaticFieldValue::VectorObject) {
+      result->_klass = env->get_instance_klass(k);
+    } else if (v.kind() == KlassTrainingData::StaticFieldValue::Species) {
+      // The canonical species of the vector class, archived with the AOT-initialized Vector API.
+      oop species = nullptr;
+      if (AOTClassInitializer::is_aot_initialized_for_code(k)) {
+        for (JavaFieldStream fs(k); !fs.done(); fs.next()) {
+          if (fs.access_flags().is_static() && fs.name() == vmSymbols::VSPECIES_name()) {
+            species = k->java_mirror()->obj_field(fs.offset());
+            break;
+          }
+        }
+      }
+      if (species == nullptr || AOTCacheAccess::get_archived_object_permanent_index(species) < 0) {
+        failure = "no archived species";
+      } else {
+        result->_object = env->get_object(species);
+      }
+    }
+    if (log_is_enabled(Debug, aot, codecache)) {
+      ResourceMark rm;
+      log_debug(aot, codecache)("%s static final %s.%s (kind %d)%s%s",
+                                failure == nullptr ? "Speculating on" : "Not speculating on",
+                                holder->external_name(), name()->as_utf8(), v.kind(),
+                                failure == nullptr ? "" : ": ", failure == nullptr ? "" : failure);
+    }
+    found = (failure == nullptr);
+  );
+  return found;
 }
 
 // ------------------------------------------------------------------

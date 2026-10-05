@@ -350,6 +350,7 @@ class Compile : public Phase {
   bool                  _has_stringbuilder;     // True StringBuffers or StringBuilders are allocated
   bool                  _has_boxed_value;       // True if a boxed object is allocated
   bool                  _has_reserved_stack_access; // True if the method or an inlined method is annotated with ReservedStackAccess
+  int                   _speculation_guards;    // Static final speculation guards (see Parse::speculate_static_field())
   uint                  _max_vector_size;       // Maximum size of generated vectors
   bool                  _clear_upper_avx;       // Clear upper bits of ymm registers using vzeroupper
   uint                  _trap_hist[trapHistLength];  // Cumulative traps
@@ -635,6 +636,7 @@ public:
   void          set_has_boxed_value(bool z)     { _has_boxed_value = z; }
   bool              has_reserved_stack_access() const { return _has_reserved_stack_access; }
   void          set_has_reserved_stack_access(bool z) { _has_reserved_stack_access = z; }
+  void              add_speculation_guard()     { _speculation_guards++; }
   uint              max_vector_size() const     { return _max_vector_size; }
   void          set_max_vector_size(uint s)     { _max_vector_size = s; }
   bool              clear_upper_avx() const     { return _clear_upper_avx; }

@@ -656,6 +656,7 @@ Compile::Compile(ciEnv* ci_env, ciMethod* target, int osr_bci,
       _inlining_incrementally(false),
       _do_cleanup(false),
       _has_reserved_stack_access(target->has_reserved_stack_access()),
+      _speculation_guards(0),
 #ifndef PRODUCT
       _igv_idx(0),
       _trace_opto_output(directive->TraceOptoOutputOption),
@@ -936,6 +937,17 @@ Compile::Compile(ciEnv* ci_env, ciMethod* target, int osr_bci,
 
   // Now generate code
   Code_Gen();
+
+  if (!failing() && _speculation_guards > 0) {
+    LogTarget(Info, aot, codecache) lt;
+    if (lt.is_enabled()) {
+      ResourceMark rm;
+      LogStream ls(lt);
+      ls.print("AOT compile %d (%s) of", _compile_id, for_preload() ? "preload" : "regular");
+      method()->print_short_name(&ls);
+      ls.print_cr(" has %d speculation guard(s)", _speculation_guards);
+    }
+  }
 }
 
 //------------------------------Compile----------------------------------------
@@ -965,6 +977,7 @@ Compile::Compile(ciEnv* ci_env,
       _inlining_progress(false),
       _inlining_incrementally(false),
       _has_reserved_stack_access(false),
+      _speculation_guards(0),
 #ifndef PRODUCT
       _igv_idx(0),
       _trace_opto_output(directive->TraceOptoOutputOption),

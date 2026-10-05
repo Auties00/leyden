@@ -971,7 +971,7 @@ AOTCodeEntry* AOTCodeCache::find_code_entry(const methodHandle& method, uint com
   }
 
   MethodCounters* mc = method->method_counters();
-  if (mc != nullptr && mc->aot_code_recompile_requested()) {
+  if (mc != nullptr && (mc->aot_code_recompile_requested() || mc->aot_code_disabled())) {
     return nullptr; // Already requested JIT compilation
   }
 
@@ -1853,6 +1853,10 @@ bool AOTCodeCache::load_nmethod(ciEnv* env, ciMethod* target, int entry_bci, Abs
     return false;
   }
   assert(entry_bci == InvocationEntryBci, "unexpected entry_bci=%d", entry_bci);
+  MethodCounters* mc = target->get_Method()->method_counters();
+  if (mc != nullptr && mc->aot_code_disabled()) {
+    return false; // Disabled after the task was created, see find_code_entry()
+  }
   TraceTime t1("Total time to load AOT code", &_t_totalLoad, enable_timers(), false);
   CompileTask* task = env->task();
   task->mark_aot_load_start(os::elapsed_counter());
