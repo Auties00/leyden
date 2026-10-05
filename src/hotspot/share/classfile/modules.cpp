@@ -157,6 +157,25 @@ static const char* as_internal_package(oop package_string, char* buf, size_t buf
   return package_name;
 }
 
+#if COMPILER2_OR_JVMCI
+// Turns on EnableVectorSupport, EnableVectorReboxing and EnableVectorAggressiveReboxing for
+// jdk.incubator.vector, leaving the flags that were set on the command line unchanged.
+static void set_vector_support_defaults() {
+  if (FLAG_IS_DEFAULT(EnableVectorSupport)) {
+    FLAG_SET_DEFAULT(EnableVectorSupport, true);
+  }
+  if (EnableVectorSupport && FLAG_IS_DEFAULT(EnableVectorReboxing)) {
+    FLAG_SET_DEFAULT(EnableVectorReboxing, true);
+  }
+  if (EnableVectorSupport && EnableVectorReboxing && FLAG_IS_DEFAULT(EnableVectorAggressiveReboxing)) {
+    FLAG_SET_DEFAULT(EnableVectorAggressiveReboxing, true);
+  }
+  log_info(compilation)("EnableVectorSupport=%s",            (EnableVectorSupport            ? "true" : "false"));
+  log_info(compilation)("EnableVectorReboxing=%s",           (EnableVectorReboxing           ? "true" : "false"));
+  log_info(compilation)("EnableVectorAggressiveReboxing=%s", (EnableVectorAggressiveReboxing ? "true" : "false"));
+}
+#endif // COMPILER2_OR_JVMCI
+
 static void define_javabase_module(Handle module_handle, jstring version, jstring location,
                                    objArrayHandle pkgs, int num_packages, TRAPS) {
   ResourceMark rm(THREAD);
@@ -457,19 +476,8 @@ void Modules::define_module(Handle module, jboolean is_open, jstring version,
 
 #if COMPILER2_OR_JVMCI
   // Special handling of jdk.incubator.vector
-  if (strcmp(module_name, "jdk.incubator.vector") == 0) {
-    if (FLAG_IS_DEFAULT(EnableVectorSupport)) {
-      FLAG_SET_DEFAULT(EnableVectorSupport, true);
-    }
-    if (EnableVectorSupport && FLAG_IS_DEFAULT(EnableVectorReboxing)) {
-      FLAG_SET_DEFAULT(EnableVectorReboxing, true);
-    }
-    if (EnableVectorSupport && EnableVectorReboxing && FLAG_IS_DEFAULT(EnableVectorAggressiveReboxing)) {
-      FLAG_SET_DEFAULT(EnableVectorAggressiveReboxing, true);
-    }
-    log_info(compilation)("EnableVectorSupport=%s",            (EnableVectorSupport            ? "true" : "false"));
-    log_info(compilation)("EnableVectorReboxing=%s",           (EnableVectorReboxing           ? "true" : "false"));
-    log_info(compilation)("EnableVectorAggressiveReboxing=%s", (EnableVectorAggressiveReboxing ? "true" : "false"));
+  if (module_symbol == vmSymbols::jdk_incubator_vector()) {
+    set_vector_support_defaults();
   }
 #endif // COMPILER2_OR_JVMCI
 }
@@ -748,6 +756,19 @@ void Modules::init_archived_modules(JavaThread* current, Handle h_platform_loade
   assert(Arguments::get_property("java.system.class.loader") == nullptr,
            "archived full module should have been disabled if -Djava.system.class.loader is specified");
   ClassLoaderDataShared::restore_java_system_loader_from_archive(system_loader_data);
+
+#if COMPILER2_OR_JVMCI
+  // Archived modules bypass define_module().
+  bool has_vector_module;
+  {
+    MutexLocker ml(current, Module_lock);
+    has_vector_module =
+      ClassLoaderData::the_null_class_loader_data()->modules()->lookup_only(vmSymbols::jdk_incubator_vector()) != nullptr;
+  }
+  if (has_vector_module) {
+    set_vector_support_defaults();
+  }
+#endif // COMPILER2_OR_JVMCI
 }
 
 void Modules::check_cds_restrictions(Handle module1, Handle module2, TRAPS) {

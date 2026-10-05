@@ -35,21 +35,31 @@ class ArchivedBootLayer {
     private static ArchivedBootLayer archivedBootLayer;
 
     private final ModuleLayer bootLayer;
+    private final boolean hasIncubatorModules;
 
-    private ArchivedBootLayer(ModuleLayer bootLayer) {
+    private ArchivedBootLayer(ModuleLayer bootLayer, boolean hasIncubatorModules) {
         this.bootLayer = bootLayer;
+        this.hasIncubatorModules = hasIncubatorModules;
     }
 
     ModuleLayer bootLayer() {
         return bootLayer;
     }
 
+    /**
+     * Returns true if the archived boot layer contains incubator modules, in
+     * which case the incubating warning must be emitted when it is used.
+     */
+    boolean hasIncubatorModules() {
+        return hasIncubatorModules;
+    }
+
     static ArchivedBootLayer get() {
         return archivedBootLayer;
     }
 
-    static void archive(ModuleLayer layer) {
-        archivedBootLayer = new ArchivedBootLayer(layer);
+    static void archive(ModuleLayer layer, boolean hasIncubatorModules) {
+        archivedBootLayer = new ArchivedBootLayer(layer, hasIncubatorModules);
     }
 
     static {

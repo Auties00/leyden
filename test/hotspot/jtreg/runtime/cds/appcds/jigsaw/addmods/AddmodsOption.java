@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2024, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2024, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -124,20 +124,45 @@ public class AddmodsOption {
             "-m", moduleOption,
             "-version");
         oa.shouldHaveExitValue(0)
-          // module graph won't be archived with an incubator module
-          .shouldContain("archivedBootLayer not available, disabling full module graph");
+          // the module graph is archived with an incubator module
+          .shouldContain("Full module graph = enabled");
 
         // run with the same incubator module
         oa = TestCommon.execCommon(
-            loggingOption,
+            loggingOption + ",compilation=info",
             "--add-modules", incubatorModule,
             "-m", moduleOption,
             "-version");
-        oa.shouldContain("full module graph: disabled")
-          // module is not restored from archive
-          .shouldContain("define_module(): creation of module: jdk.incubator.vector")
-          .shouldContain("WARNING: Using incubator modules: jdk.incubator.vector")
-          .shouldContain("subgraph jdk.internal.module.ArchivedBootLayer is not recorde")
+        oa.shouldContain("full module graph: enabled")
+          // module is restored from archive
+          .shouldMatch("aot,module.*Restored from archive: entry.0x.*name jdk.incubator.vector")
+          .shouldNotContain("define_module(): creation of module: jdk.incubator.vector")
+          // the incubating warning is printed from the archived boot layer too
+          .shouldContain(warningIncubator)
+          .shouldHaveExitValue(0);
+        if (Compiler.isC2OrJVMCIIncluded()) {
+            // the restored module sets the Vector API flags as define_module() does
+            oa.shouldContain("EnableVectorSupport=true");
+
+            // an explicit setting is kept
+            oa = TestCommon.execCommon(
+                "-Xlog:aot=info,compilation=info",
+                "-XX:+UnlockExperimentalVMOptions", "-XX:-EnableVectorSupport",
+                "--add-modules", incubatorModule,
+                "-m", moduleOption,
+                "-version");
+            oa.shouldContain("full module graph: enabled")
+              .shouldContain("EnableVectorSupport=false")
+              .shouldHaveExitValue(0);
+        }
+
+        // the archive is not used without the incubator module, and no warning is printed
+        oa = TestCommon.execCommon(
+            loggingOption,
+            "-m", moduleOption,
+            "-version");
+        oa.shouldContain(subgraphCannotBeUsed)
+          .shouldNotContain(warningIncubator)
           .shouldHaveExitValue(0);
 
         if (Compiler.isJVMCIEnabled()) {
@@ -212,7 +237,7 @@ public class AddmodsOption {
         oa.shouldHaveExitValue(0)
           // the jdk.incubator.vector was specified indirectly via ALL-SYSTEM
           .shouldContain(warningIncubator)
-          .shouldContain("full module graph cannot be loaded: archive was created without full module graph");
+          .shouldContain("full module graph: enabled");
 
         // dump an archive with ALL-MODULE-PATH in -add-modules
         archiveName = TestCommon.getNewArchiveName("muti-modules");

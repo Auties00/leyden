@@ -165,6 +165,11 @@ public final class ModuleBootstrap {
             // assume boot layer has at least one module providing a service
             // that is mapped to the application class loader.
             JLA.bindToLoader(bootLayer, ClassLoaders.appClassLoader());
+
+            // emit the same incubating warning as boot2
+            if (archivedBootLayer.hasIncubatorModules()) {
+                checkIncubatingStatus(bootLayer.configuration());
+            }
         } else {
             bootLayer = boot2();
         }
@@ -477,8 +482,8 @@ public final class ModuleBootstrap {
                                         clf,
                                         mainModule,
                                         addModules);
-            if (!hasSplitPackages && !hasIncubatorModules) {
-                ArchivedBootLayer.archive(bootLayer);
+            if (!hasSplitPackages) {
+                ArchivedBootLayer.archive(bootLayer, hasIncubatorModules);
             }
         }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023, 2025, Oracle and/or its affiliates. All rights reserved.
+ * Copyright (c) 2023, 2026, Oracle and/or its affiliates. All rights reserved.
  * DO NOT ALTER OR REMOVE COPYRIGHT NOTICES OR THIS FILE HEADER.
  *
  * This code is free software; you can redistribute it and/or modify it
@@ -110,19 +110,19 @@ public class ModuleOption {
             "-m", incubatorModule,
             "-version");
         oa.shouldHaveExitValue(0)
-          // module graph won't be archived with an incubator module
-          .shouldContain("archivedBootLayer not available, disabling full module graph");
+          // the module graph is archived with an incubator module
+          .shouldContain("Full module graph = enabled");
 
         // run with the same incubator module
         oa = TestCommon.execCommon(
             loggingOption,
             "-m", incubatorModule,
             "-version");
-        oa.shouldContain("full module graph: disabled")
-          // module is not restored from archive
-          .shouldContain("define_module(): creation of module: jdk.incubator.vector")
+        oa.shouldContain("full module graph: enabled")
+          // module is restored from archive
+          .shouldMatch("aot,module.*Restored from archive: entry.0x.*name jdk.incubator.vector")
+          .shouldNotContain("define_module(): creation of module: jdk.incubator.vector")
           .shouldContain("WARNING: Using incubator modules: jdk.incubator.vector")
-          .shouldContain("subgraph jdk.internal.module.ArchivedBootLayer is not recorde")
           .shouldContain("module jdk.incubator.vector does not have a ModuleMainClass attribute, use -m <module>/<main-class>")
           .shouldHaveExitValue(1);
     }
