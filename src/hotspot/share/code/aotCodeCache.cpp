@@ -3401,7 +3401,13 @@ void AOTCodeAddressTable::init_stubs() {
   SET_ADDRESS(_stubs, StubRoutines::dilithiumNttMult());
   SET_ADDRESS(_stubs, StubRoutines::dilithiumMontMulByConstant());
   SET_ADDRESS(_stubs, StubRoutines::dilithiumDecomposePoly());
+  SET_ADDRESS(_stubs, StubRoutines::kyberNtt());
+  SET_ADDRESS(_stubs, StubRoutines::kyberInverseNtt());
+  SET_ADDRESS(_stubs, StubRoutines::kyberNttMult());
+  SET_ADDRESS(_stubs, StubRoutines::kyberAddPoly_2());
+  SET_ADDRESS(_stubs, StubRoutines::kyberAddPoly_3());
   SET_ADDRESS(_stubs, StubRoutines::kyber12To16());
+  SET_ADDRESS(_stubs, StubRoutines::kyberBarrettReduce());
 
   SET_ADDRESS(_stubs, StubRoutines::updateBytesCRC32());
   SET_ADDRESS(_stubs, StubRoutines::updateBytesCRC32C());
@@ -3430,6 +3436,9 @@ void AOTCodeAddressTable::init_stubs() {
   SET_ADDRESS(_stubs, StubRoutines::dlibm_sin_cos_huge());
   SET_ADDRESS(_stubs, StubRoutines::dlibm_tan_cot_huge());
   SET_ADDRESS(_stubs, StubRoutines::dtan());
+  SET_ADDRESS(_stubs, StubRoutines::dsinh());
+  SET_ADDRESS(_stubs, StubRoutines::dtanh());
+  SET_ADDRESS(_stubs, StubRoutines::dcbrt());
 
   SET_ADDRESS(_stubs, StubRoutines::f2hf_adr());
   SET_ADDRESS(_stubs, StubRoutines::hf2f_adr());
