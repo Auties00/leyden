@@ -1219,6 +1219,21 @@ static bool counters_are_meaningful(int counter1, int counter2, int min) {
 // Try to gather dynamic branch prediction behavior.  Return a probability
 // of the branch being taken and set the "cnt" field.  Returns a -1.0
 // if we need to use static prediction for some reason.
+// Returns true if the compare tests a static field that a runtimeSetup() method sets again when an
+// AOT cache is used, such as the per-process salt of ImmutableCollections.
+static bool tests_runtime_setup_field(Compile* C, Node* cmp) {
+  for (uint i = 1; i < cmp->req(); i++) {
+    Node* in = cmp->in(i);
+    if (in != nullptr && in->is_Load()) {
+      ciField* field = C->alias_type(in->adr_type())->field();
+      if (field != nullptr && field->is_static() && field->holder()->has_aot_runtime_setup()) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
 float Parse::dynamic_branch_prediction(float &cnt, BoolTest::mask btest, Node* test) {
   ResourceMark rm;
 
@@ -1228,6 +1243,12 @@ float Parse::dynamic_branch_prediction(float &cnt, BoolTest::mask btest, Node* t
   int not_taken = 0;
 
   bool use_mdo = !has_injected_profile(btest, test, taken, not_taken);
+
+  if (use_mdo && test != nullptr && C->env()->is_aot_compile() && tests_runtime_setup_field(C, test)) {
+    // The training run's value of the field, and so its profile of this branch, need not be the
+    // production run's.
+    return PROB_UNKNOWN;
+  }
 
   if (use_mdo) {
     // Use MethodData information if it is available

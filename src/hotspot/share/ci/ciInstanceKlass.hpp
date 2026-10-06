@@ -126,6 +126,8 @@ public:
   // Returns true if AOT code may fold the static fields of this class and the fields of its
   // archived instances (see AOTClassInitializer::is_aot_initialized_for_code()).
   bool is_aot_initialized_for_code();
+  // Stored initialized, with a runtimeSetup() that sets its static state again at run time.
+  bool has_aot_runtime_setup();
 
   // Has this klass been initialized?
   bool                   is_initialized() {

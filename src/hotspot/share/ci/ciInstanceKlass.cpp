@@ -849,3 +849,12 @@ bool ciInstanceKlass::is_aot_initialized_for_code() {
   GUARDED_VM_ENTRY(result = AOTClassInitializer::is_aot_initialized_for_code(get_instanceKlass());)
   return result;
 }
+
+bool ciInstanceKlass::has_aot_runtime_setup() {
+  bool result = false;
+  GUARDED_VM_ENTRY(
+    InstanceKlass* ik = get_instanceKlass();
+    result = ik->has_aot_initialized_mirror() && ik->is_runtime_setup_required();
+  )
+  return result;
+}
