@@ -3442,6 +3442,18 @@ public abstract class $abstractvectortype$ extends AbstractVector<$Boxtype$> {
     ImplCache<Associative, ReductionOperation<$abstractvectortype$, VectorMask<$Boxtype$>>>
         REDUCE_IMPL = new ImplCache<>(Associative.class, $Type$Vector.class);
 
+    // Fills the operation caches when the AOT cache is created, see AbstractSpecies.assemblySetup().
+    /*package-private*/
+    static void fillImplCaches() {
+        UN_IMPL.fill($abstractvectortype$::unaryOperations);
+        BIN_IMPL.fill($abstractvectortype$::binaryOperations);
+#if[BITWISE]
+        BIN_INT_IMPL.fill($abstractvectortype$::broadcastIntOperations);
+#end[BITWISE]
+        TERN_IMPL.fill($abstractvectortype$::ternaryOperations);
+        REDUCE_IMPL.fill($abstractvectortype$::reductionOperations);
+    }
+
     private static ReductionOperation<$abstractvectortype$, VectorMask<$Boxtype$>> reductionOperations(int opc_) {
         switch (opc_) {
             case VECTOR_OP_ADD: return (v, m) ->

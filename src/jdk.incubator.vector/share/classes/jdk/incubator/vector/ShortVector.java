@@ -2869,6 +2869,16 @@ public abstract class ShortVector extends AbstractVector<Short> {
     ImplCache<Associative, ReductionOperation<ShortVector, VectorMask<Short>>>
         REDUCE_IMPL = new ImplCache<>(Associative.class, ShortVector.class);
 
+    // Fills the operation caches when the AOT cache is created, see AbstractSpecies.assemblySetup().
+    /*package-private*/
+    static void fillImplCaches() {
+        UN_IMPL.fill(ShortVector::unaryOperations);
+        BIN_IMPL.fill(ShortVector::binaryOperations);
+        BIN_INT_IMPL.fill(ShortVector::broadcastIntOperations);
+        TERN_IMPL.fill(ShortVector::ternaryOperations);
+        REDUCE_IMPL.fill(ShortVector::reductionOperations);
+    }
+
     private static ReductionOperation<ShortVector, VectorMask<Short>> reductionOperations(int opc_) {
         switch (opc_) {
             case VECTOR_OP_ADD: return (v, m) ->

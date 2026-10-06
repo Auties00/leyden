@@ -2719,6 +2719,16 @@ public abstract class LongVector extends AbstractVector<Long> {
     ImplCache<Associative, ReductionOperation<LongVector, VectorMask<Long>>>
         REDUCE_IMPL = new ImplCache<>(Associative.class, LongVector.class);
 
+    // Fills the operation caches when the AOT cache is created, see AbstractSpecies.assemblySetup().
+    /*package-private*/
+    static void fillImplCaches() {
+        UN_IMPL.fill(LongVector::unaryOperations);
+        BIN_IMPL.fill(LongVector::binaryOperations);
+        BIN_INT_IMPL.fill(LongVector::broadcastIntOperations);
+        TERN_IMPL.fill(LongVector::ternaryOperations);
+        REDUCE_IMPL.fill(LongVector::reductionOperations);
+    }
+
     private static ReductionOperation<LongVector, VectorMask<Long>> reductionOperations(int opc_) {
         switch (opc_) {
             case VECTOR_OP_ADD: return (v, m) ->

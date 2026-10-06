@@ -294,10 +294,10 @@ public class AOTCodeVectorAPI {
         t.useWhiteBox(ClassFileInstaller.getJarPath("WhiteBox.jar"));
         t.runAOTWorkflow("AOT", oneStep ? "--one-step-training" : "--two-step-training");
 
-        // The preload code is installed before main(). A box kept in the stored code would allocate
-        // in every call. The app checks the calls that ran the same C2 code from start to end
-        // without a deoptimization; the first execution of the preload code can still take a
-        // predicate trap and run at C1 until the regular AOT code is loaded.
+        // The preload code is installed before main() and runs from the first call: every call runs
+        // the same C2 code from start to end without a deoptimization (a trap in the first
+        // execution would leave the kernel to C1 until the regular AOT code is loaded), and none
+        // allocates (a box kept in the stored code would allocate in every call).
         String[] appArgs = kernel.equals("jdk") ? new String[] {"exact"} : new String[0];
         OutputAnalyzer out = t.productionRun(new String[] {"-XX:+UnlockDiagnosticVMOptions", "-XX:+PreloadBlocking"},
                                              appArgs);
@@ -310,8 +310,8 @@ public class AOTCodeVectorAPI {
             }
             int calls = Integer.parseInt(m.group(1));
             int allocating = Integer.parseInt(m.group(2));
-            if (allocating != 0 || calls < 100) {
-                throw new RuntimeException(allocating + " of " + calls + " compiled calls of the stored kernel allocated");
+            if (allocating != 0 || calls != Integer.parseInt(PRODUCTION_ROUNDS) - 1) {
+                throw new RuntimeException(calls + " calls ran the stored code throughout, " + allocating + " of them allocated");
             }
         }
     }

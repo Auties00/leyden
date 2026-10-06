@@ -2868,6 +2868,16 @@ public abstract class ByteVector extends AbstractVector<Byte> {
     ImplCache<Associative, ReductionOperation<ByteVector, VectorMask<Byte>>>
         REDUCE_IMPL = new ImplCache<>(Associative.class, ByteVector.class);
 
+    // Fills the operation caches when the AOT cache is created, see AbstractSpecies.assemblySetup().
+    /*package-private*/
+    static void fillImplCaches() {
+        UN_IMPL.fill(ByteVector::unaryOperations);
+        BIN_IMPL.fill(ByteVector::binaryOperations);
+        BIN_INT_IMPL.fill(ByteVector::broadcastIntOperations);
+        TERN_IMPL.fill(ByteVector::ternaryOperations);
+        REDUCE_IMPL.fill(ByteVector::reductionOperations);
+    }
+
     private static ReductionOperation<ByteVector, VectorMask<Byte>> reductionOperations(int opc_) {
         switch (opc_) {
             case VECTOR_OP_ADD: return (v, m) ->

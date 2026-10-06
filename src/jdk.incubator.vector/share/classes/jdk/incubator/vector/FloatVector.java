@@ -2714,6 +2714,15 @@ public abstract class FloatVector extends AbstractVector<Float> {
     ImplCache<Associative, ReductionOperation<FloatVector, VectorMask<Float>>>
         REDUCE_IMPL = new ImplCache<>(Associative.class, FloatVector.class);
 
+    // Fills the operation caches when the AOT cache is created, see AbstractSpecies.assemblySetup().
+    /*package-private*/
+    static void fillImplCaches() {
+        UN_IMPL.fill(FloatVector::unaryOperations);
+        BIN_IMPL.fill(FloatVector::binaryOperations);
+        TERN_IMPL.fill(FloatVector::ternaryOperations);
+        REDUCE_IMPL.fill(FloatVector::reductionOperations);
+    }
+
     private static ReductionOperation<FloatVector, VectorMask<Float>> reductionOperations(int opc_) {
         switch (opc_) {
             case VECTOR_OP_ADD: return (v, m) ->

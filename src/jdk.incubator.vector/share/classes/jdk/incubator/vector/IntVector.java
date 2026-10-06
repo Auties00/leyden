@@ -2853,6 +2853,16 @@ public abstract class IntVector extends AbstractVector<Integer> {
     ImplCache<Associative, ReductionOperation<IntVector, VectorMask<Integer>>>
         REDUCE_IMPL = new ImplCache<>(Associative.class, IntVector.class);
 
+    // Fills the operation caches when the AOT cache is created, see AbstractSpecies.assemblySetup().
+    /*package-private*/
+    static void fillImplCaches() {
+        UN_IMPL.fill(IntVector::unaryOperations);
+        BIN_IMPL.fill(IntVector::binaryOperations);
+        BIN_INT_IMPL.fill(IntVector::broadcastIntOperations);
+        TERN_IMPL.fill(IntVector::ternaryOperations);
+        REDUCE_IMPL.fill(IntVector::reductionOperations);
+    }
+
     private static ReductionOperation<IntVector, VectorMask<Integer>> reductionOperations(int opc_) {
         switch (opc_) {
             case VECTOR_OP_ADD: return (v, m) ->

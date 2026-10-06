@@ -713,5 +713,13 @@ abstract class AbstractSpecies<E> extends jdk.internal.vm.vector.VectorSupport.V
                 VectorOperators.ConversionImpl.ofReinterpret(laneType, ran);
             }
         }
+        // The operations of the vector types used when the cache was trained. AOT code folds them
+        // from these caches, which training filled as the operations ran.
+        if (!u.shouldBeInitialized(ByteVector.class))    ByteVector.fillImplCaches();
+        if (!u.shouldBeInitialized(ShortVector.class))   ShortVector.fillImplCaches();
+        if (!u.shouldBeInitialized(IntVector.class))     IntVector.fillImplCaches();
+        if (!u.shouldBeInitialized(LongVector.class))    LongVector.fillImplCaches();
+        if (!u.shouldBeInitialized(FloatVector.class))   FloatVector.fillImplCaches();
+        if (!u.shouldBeInitialized(DoubleVector.class))  DoubleVector.fillImplCaches();
     }
 }

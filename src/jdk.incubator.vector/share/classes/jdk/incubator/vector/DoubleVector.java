@@ -2694,6 +2694,15 @@ public abstract class DoubleVector extends AbstractVector<Double> {
     ImplCache<Associative, ReductionOperation<DoubleVector, VectorMask<Double>>>
         REDUCE_IMPL = new ImplCache<>(Associative.class, DoubleVector.class);
 
+    // Fills the operation caches when the AOT cache is created, see AbstractSpecies.assemblySetup().
+    /*package-private*/
+    static void fillImplCaches() {
+        UN_IMPL.fill(DoubleVector::unaryOperations);
+        BIN_IMPL.fill(DoubleVector::binaryOperations);
+        TERN_IMPL.fill(DoubleVector::ternaryOperations);
+        REDUCE_IMPL.fill(DoubleVector::reductionOperations);
+    }
+
     private static ReductionOperation<DoubleVector, VectorMask<Double>> reductionOperations(int opc_) {
         switch (opc_) {
             case VECTOR_OP_ADD: return (v, m) ->

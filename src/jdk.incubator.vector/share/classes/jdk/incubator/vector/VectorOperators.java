@@ -1392,6 +1392,15 @@ public abstract class VectorOperators {
             return fn;
         }
 
+        // Fills every entry the supplier provides; see AbstractSpecies.assemblySetup().
+        void fill(IntFunction<T> supplier) {
+            for (int opc = 0; opc < cache.length; opc++) {
+                if (cache[opc] == null) {
+                    cache[opc] = supplier.apply(opc);
+                }
+            }
+        }
+
         private UnsupportedOperationException badOp(Operator op) {
             String msg = String.format("%s: illegal %s in %s",
                                        op,
