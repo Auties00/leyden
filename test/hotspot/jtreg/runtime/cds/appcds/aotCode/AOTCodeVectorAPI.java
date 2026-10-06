@@ -383,7 +383,10 @@ public class AOTCodeVectorAPI {
     static void speculation() throws Exception {
         String method = kernelMethod("spec");
         String expected = expectedSum("spec");
-        Tester t = new Tester("spec") {
+        // earlyScaled() keeps its own code, which training compiles in time only if it is called
+        // as a method, not inlined into a loop that is compiled first.
+        Tester t = new Tester("spec", "-XX:CompileCommand=quiet",
+                              "-XX:CompileCommand=dontinline,VectorKernels$Spec::earlyScaled") {
             @Override
             public void checkExecution(OutputAnalyzer out, RunMode runMode) throws Exception {
                 if (runMode == RunMode.TRAINING) {
@@ -404,13 +407,13 @@ public class AOTCodeVectorAPI {
         out.shouldContain(expected);
         out.shouldNotContain("Speculation failed");
 
-        // EARLY is computed in the static initializer, which calls scaled() before SCALE is
-        // assigned: the preload code of scaled() then sees SCALE as 0 and leaves the call to the
-        // interpreter without failing the speculation.
+        // EARLY is computed in the static initializer, which calls earlyScaled() before SCALE is
+        // assigned: the preload code of earlyScaled() then sees SCALE as 0 and leaves the call to
+        // the interpreter without failing the speculation.
         out = t.productionRun(new String[] {"-XX:+UnlockDiagnosticVMOptions", "-XX:+PreloadBlocking",
                                             "-Xlog:deoptimization=debug"});
         out.shouldContain(expected);
-        out.shouldMatch("VectorKernels\\$Spec::scaled.* uninitialized none");
+        out.shouldMatch("VectorKernels\\$Spec::earlyScaled.* uninitialized none");
         out.shouldNotContain("Speculation failed");
 
         for (String[] f : SPECULATED) {
@@ -584,13 +587,17 @@ class VectorKernels {
                 ? IntVector.broadcast(SP.length() == 2 ? IntVector.SPECIES_128 : IntVector.SPECIES_64, 2)
                 : IntVector.broadcast(SP, 2);
 
-        // Runs before SCALE is assigned.
+        // Runs before SCALE is assigned, often enough for earlyScaled() to be compiled.
         static int early() {
             int s = 0;
-            for (int i = 0; i < 2000; i++) {
-                s += scaled(i) + 1;
+            for (int i = 0; i < 8000; i++) {
+                s += earlyScaled(i) + 1;
             }
             return s;
+        }
+
+        static int earlyScaled(int x) {
+            return x * SCALE;
         }
 
         static int scaled(int x) {
