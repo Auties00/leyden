@@ -1098,6 +1098,9 @@ public:
     _late_inlines.insert_before(0, cg);
   }
 
+  // Returns the generator that is going to inline call after parsing, or null.
+  CallGenerator*    late_inline_of(const CallJavaNode* call) const;
+
   void              add_string_late_inline(CallGenerator* cg) {
     _string_late_inlines.push(cg);
   }

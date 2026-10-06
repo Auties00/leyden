@@ -430,6 +430,12 @@ class GraphKit : public Phase {
     return nullptr;
   }
 
+  // Returns the generator that is going to inline, after parsing, the call whose result is n, or null.
+  CallGenerator* late_inline_producing(Node* n) const;
+  // Returns the class of the result of a Vector API intrinsic call, named by a constant class
+  // argument of the call, if it is a final subtype of require_klass; or null.
+  ciKlass* vector_intrinsic_result_klass(CallJavaNode* call, const TypeKlassPtr* require_klass);
+
   // record type from profiling with the type system
   Node* record_profile_for_speculation(Node* n, ciKlass* exact_kls, ProfilePtrKind ptr_kind);
   void record_profiled_arguments_for_speculation(ciMethod* dest_method, Bytecodes::Code bc);

@@ -4609,6 +4609,16 @@ Compile::TracePhase::~TracePhase() {
   }
 }
 
+CallGenerator* Compile::late_inline_of(const CallJavaNode* call) const {
+  for (int i = 0; i < _late_inlines.length(); i++) {
+    CallGenerator* cg = _late_inlines.at(i);
+    if (cg->call_node() == call) {
+      return cg;
+    }
+  }
+  return nullptr;
+}
+
 //----------------------------static_subtype_check-----------------------------
 // Shortcut important common cases when superklass is exact:
 // (0) superklass is java.lang.Object (can occur in reflective code)

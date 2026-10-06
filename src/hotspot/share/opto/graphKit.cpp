@@ -33,6 +33,7 @@
 #include "memory/resourceArea.hpp"
 #include "oops/trainingData.hpp"
 #include "opto/addnode.hpp"
+#include "opto/callGenerator.hpp"
 #include "opto/castnode.hpp"
 #include "opto/convertnode.hpp"
 #include "opto/graphKit.hpp"
@@ -3221,6 +3222,70 @@ void GraphKit::clinit_barrier(ciInstanceKlass* ik, ciMethod* context) {
   }
 }
 
+CallGenerator* GraphKit::late_inline_producing(Node* n) const {
+  n = n->uncast();
+  if (!n->is_Proj() || n->as_Proj()->_con != TypeFunc::Parms || !n->in(0)->is_CallJava()) {
+    return nullptr;
+  }
+  return C->late_inline_of(n->in(0)->as_CallJava());
+}
+
+// Returns the parameters of a Vector API intrinsic that name the class of its result, as a bit set.
+static int vector_result_class_params(vmIntrinsics::ID id) {
+  switch (id) {
+    case vmIntrinsics::_VectorFromBitsCoerced:
+    case vmIntrinsics::_VectorLoadOp:
+    case vmIntrinsics::_VectorLoadMaskedOp:
+    case vmIntrinsics::_VectorGatherOp:
+    case vmIntrinsics::_VectorBlend:
+    case vmIntrinsics::_VectorRearrange:
+    case vmIntrinsics::_VectorSelectFrom:
+    case vmIntrinsics::_VectorSelectFromTwoVectorOp:
+    case vmIntrinsics::_VectorInsert:
+    case vmIntrinsics::_IndexVector:
+    case vmIntrinsics::_IndexPartiallyInUpperRange:
+      return 1 << 0;
+    case vmIntrinsics::_VectorUnaryOp:
+    case vmIntrinsics::_VectorBinaryOp:
+    case vmIntrinsics::_VectorTernaryOp:
+    case vmIntrinsics::_VectorBroadcastInt:
+    case vmIntrinsics::_VectorUnaryLibOp:
+    case vmIntrinsics::_VectorBinaryLibOp:
+      return 1 << 1;
+    case vmIntrinsics::_VectorCompare:
+      return 1 << 2;
+    case vmIntrinsics::_VectorConvert:
+      return 1 << 4;
+    case vmIntrinsics::_VectorCompressExpand:
+      return (1 << 1) | (1 << 2); // a vector or a mask, depending on the operation
+    default:
+      return 0;
+  }
+}
+
+ciKlass* GraphKit::vector_intrinsic_result_klass(CallJavaNode* call, const TypeKlassPtr* require_klass) {
+  ciMethod* m = call->method();
+  int params = vector_result_class_params(m->intrinsic_id());
+  ciSignature* sig = m->signature();
+  ciKlass* result = nullptr;
+  uint input = TypeFunc::Parms; // the intrinsics are static methods
+  for (int i = 0; i < sig->count() && input < call->req(); i++) {
+    if ((params & (1 << i)) != 0) {
+      const TypeInstPtr* mirror = _gvn.type(call->in(input))->isa_instptr();
+      ciType* k = (mirror != nullptr) ? mirror->java_mirror_type() : nullptr;
+      if (k != nullptr && k->is_instance_klass() && k->as_instance_klass()->is_final() &&
+          C->static_subtype_check(require_klass, TypeKlassPtr::make(k->as_klass(), Type::trust_interfaces)) == Compile::SSC_always_true) {
+        if (result != nullptr && result != k) {
+          return nullptr;
+        }
+        result = k->as_klass();
+      }
+    }
+    input += sig->type_at(i)->size();
+  }
+  return result;
+}
+
 //------------------------maybe_cast_profiled_receiver-------------------------
 // If the profile has seen exactly one type, narrow to exactly that type.
 // Subsequent type checks will always fold up.
@@ -3229,6 +3294,29 @@ Node* GraphKit::maybe_cast_profiled_receiver(Node* not_null_obj,
                                              ciKlass* spec_klass,
                                              bool safe_for_replace) {
   if (!UseTypeProfile || !TypeProfileCasts) return nullptr;
+
+  // The type of the result of a call that is inlined after parsing is only known then. The profile
+  // of this bytecode is shared by every caller of the method holding it, so it can name another
+  // class than the one the call returns in this caller, as when the call returns a constant that
+  // depends on the caller, and the exact check then fails on every execution. The result of a
+  // parsed method is not narrowed. The result of a Vector API intrinsic is narrowed to the class
+  // the call names in its arguments: the vector, mask or shuffle class it returns, which the
+  // methods called on the result need to be inlined while parsing.
+  ciKlass* late_kls = nullptr;
+  CallGenerator* late_cg = late_inline_producing(not_null_obj);
+  if (late_cg != nullptr && late_cg->is_late_inline_of_parsed_method()) {
+    return nullptr;
+  }
+  if (late_cg != nullptr && late_cg->is_late_inline_of_intrinsic()) {
+    if (require_klass == nullptr) {
+      return nullptr;
+    }
+    late_kls = vector_intrinsic_result_klass(late_cg->call_node()->as_CallJava(), require_klass);
+    if (late_kls == nullptr) {
+      return nullptr;
+    }
+    spec_klass = nullptr;
+  }
 
   Deoptimization::DeoptReason reason = Deoptimization::reason_class_check(spec_klass != nullptr);
 
@@ -3240,7 +3328,7 @@ Node* GraphKit::maybe_cast_profiled_receiver(Node* not_null_obj,
   // to use the same ciMethod accessor to get the profile info...)
   // If we have a speculative type use it instead of profiling (which
   // may not help us)
-  ciKlass* exact_kls = spec_klass == nullptr ? profile_has_unique_klass() : spec_klass;
+  ciKlass* exact_kls = late_kls != nullptr ? late_kls : (spec_klass == nullptr ? profile_has_unique_klass() : spec_klass);
   if (exact_kls != nullptr) {// no cast failures here
     if (require_klass == nullptr ||
         C->static_subtype_check(require_klass, TypeKlassPtr::make(exact_kls, Type::trust_interfaces)) == Compile::SSC_always_true) {

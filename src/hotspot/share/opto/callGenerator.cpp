@@ -324,6 +324,14 @@ class LateInlineCallGenerator : public DirectCallGenerator {
 
   virtual bool is_late_inline() const { return true; }
 
+  virtual bool is_late_inline_of_parsed_method() const {
+    return !is_mh_late_inline() && _inline_cg != nullptr && !_inline_cg->is_intrinsic();
+  }
+
+  virtual bool is_late_inline_of_intrinsic() const {
+    return _inline_cg != nullptr && _inline_cg->is_intrinsic();
+  }
+
   // Convert the CallStaticJava into an inline
   virtual void do_late_inline();
 

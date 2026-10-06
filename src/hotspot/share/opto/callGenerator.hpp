@@ -78,6 +78,10 @@ class CallGenerator : public ArenaObj {
   virtual bool      is_boxing_late_inline() const  { return false; }
   virtual bool      is_vector_reboxing_late_inline() const  { return false; }
   virtual bool      is_virtual_late_inline() const { return false; }
+  // is_late_inline_of_parsed_method: a late inline that replaces the call with the parsed method
+  virtual bool      is_late_inline_of_parsed_method() const { return false; }
+  // is_late_inline_of_intrinsic: a late inline that replaces the call with an intrinsic
+  virtual bool      is_late_inline_of_intrinsic() const { return false; }
 
   // Replace the call with an inline version of the code
   virtual void do_late_inline() { ShouldNotReachHere(); }
