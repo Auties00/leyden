@@ -255,6 +255,7 @@ bool Parse::speculate_static_field(Node* obj, ciField* field) {
       return false;
   }
 
+  uint first_node = C->unique();
   const TypePtr* adr_type = C->alias_type(field)->adr_type();
   Node* adr = basic_plus_adr(obj, obj, field->offset_in_bytes());
   const Type* load_type = is_reference_type(bt) ? TypeOopPtr::make_from_klass(field->type()->as_klass())
@@ -306,6 +307,7 @@ bool Parse::speculate_static_field(Node* obj, ciField* field) {
     }
     result = casted;
   }
+  C->add_aot_check_nodes(C->unique() - first_node);
   if (stopped()) {
     return true;
   }

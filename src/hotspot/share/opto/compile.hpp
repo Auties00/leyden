@@ -351,6 +351,7 @@ class Compile : public Phase {
   bool                  _has_boxed_value;       // True if a boxed object is allocated
   bool                  _has_reserved_stack_access; // True if the method or an inlined method is annotated with ReservedStackAccess
   int                   _speculation_guards;    // Static final speculation guards (see Parse::speculate_static_field())
+  uint                  _aot_check_nodes;       // Nodes created for checks only AOT code has (see over_inlining_cutoff())
   uint                  _max_vector_size;       // Maximum size of generated vectors
   bool                  _clear_upper_avx;       // Clear upper bits of ymm registers using vzeroupper
   uint                  _trap_hist[trapHistLength];  // Cumulative traps
@@ -637,6 +638,7 @@ public:
   bool              has_reserved_stack_access() const { return _has_reserved_stack_access; }
   void          set_has_reserved_stack_access(bool z) { _has_reserved_stack_access = z; }
   void              add_speculation_guard()     { _speculation_guards++; }
+  void              add_aot_check_nodes(uint n) { _aot_check_nodes += n; }
   uint              max_vector_size() const     { return _max_vector_size; }
   void          set_max_vector_size(uint s)     { _max_vector_size = s; }
   bool              clear_upper_avx() const     { return _clear_upper_avx; }
@@ -1125,7 +1127,11 @@ public:
 
   bool over_inlining_cutoff() const {
     if (!inlining_incrementally()) {
-      return unique() > (uint)NodeCountInliningCutoff;
+      // The nodes of the speculation guards and class initialization barriers of AOT code are
+      // not counted: JIT code has neither, and an AOT compilation inlines like the training's JIT
+      // compilation, whose profile it uses. A callee that the JIT compilation inlined is not
+      // compiled on its own in training, so AOT code that calls it would run its tier 2 code.
+      return unique() - _aot_check_nodes > (uint)NodeCountInliningCutoff;
     } else {
       // Give some room for incremental inlining algorithm to "breathe"
       // and avoid thrashing when live node count is close to the limit.

@@ -394,7 +394,13 @@ bool InlineTree::try_to_inline(ciMethod* callee_method, ciMethod* caller_method,
 
     // don't inline into giant methods
     if (C->over_inlining_cutoff()) {
-      if ((!callee_method->force_inline() && !caller_method->is_compiled_lambda_form())
+      if (C->env()->is_aot_compile() && C->live_nodes() <= (uint)LiveNodeCountInliningCutoff &&
+          callee_method->only_inlined_by_c2_in_training()) {
+        // The training inlined the callee in its C2 compilations and the AOT cache has no C2 code
+        // of the callee's own, so an out-of-line call would run its tier 2 code. AOT compilations
+        // run when the cache is created: the callee is inlined within the budget of incremental
+        // inlining.
+      } else if ((!callee_method->force_inline() && !caller_method->is_compiled_lambda_form())
           || !IncrementalInline) {
         set_msg("NodeCountInliningCutoff");
         return false;

@@ -3198,8 +3198,10 @@ void GraphKit::guard_init_thread(Node* klass) {
 
 void GraphKit::clinit_barrier(ciInstanceKlass* ik, ciMethod* context) {
   if (C->do_clinit_barriers()) {
+    uint first_node = C->unique();
     Node* klass = makecon(TypeKlassPtr::make(ik, Type::trust_interfaces));
     guard_klass_is_initialized(klass);
+    C->add_aot_check_nodes(C->unique() - first_node);
     return;
   }
   if (ik->is_being_initialized()) {

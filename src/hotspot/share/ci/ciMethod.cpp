@@ -1259,6 +1259,26 @@ int ciMethod::inline_instructions_size() {
 }
 
 // ------------------------------------------------------------------
+// ciMethod::only_inlined_by_c2_in_training
+//
+// Returns true if the training run compiled this method with C2 only as part of other methods. The
+// AOT cache then has no C2 code of the method's own: AOT compilation follows the levels of the
+// training's top-level compilations (see AOTCompileIterator::include()).
+bool ciMethod::only_inlined_by_c2_in_training() {
+  if (!TrainingData::have_data()) {
+    return false;
+  }
+  bool result = false;
+  GUARDED_VM_ENTRY(
+    methodHandle mh(Thread::current(), get_Method());
+    MethodTrainingData* mtd = MethodTrainingData::find(mh);
+    result = (mtd != nullptr && mtd->saw_level(CompLevel_full_optimization) &&
+              mtd->highest_top_level() < CompLevel_full_optimization);
+  );
+  return result;
+}
+
+// ------------------------------------------------------------------
 // ciMethod::log_nmethod_identity
 void ciMethod::log_nmethod_identity(xmlStream* log) {
   GUARDED_VM_ENTRY(

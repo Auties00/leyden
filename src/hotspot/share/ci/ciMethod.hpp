@@ -323,6 +323,7 @@ class ciMethod : public ciMetadata {
   ciMetadata* ensure_method_counters();
 
   int inline_instructions_size();
+  bool only_inlined_by_c2_in_training();
   int scale_count(int count, float prof_factor = 1.);  // make MDO count commensurate with IIC
 
   // Stack walking support
